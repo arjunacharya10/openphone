@@ -1,10 +1,24 @@
 import type { FastifyPluginAsync } from "fastify";
-import { getActiveCards, createCard, actOnCard } from "../services/store.js";
+import {
+  getActiveCards,
+  getCardById,
+  createCard,
+  actOnCard,
+} from "../services/store.js";
 
 const cardRoutes: FastifyPluginAsync = async (app) => {
   // Fetch active cards sorted by priority
   app.get("/cards", async () => {
     return getActiveCards();
+  });
+
+  // Fetch a single card by id (including non-active)
+  app.get<{ Params: { id: string } }>("/cards/:id", async (request, reply) => {
+    const card = getCardById(request.params.id);
+    if (!card) {
+      return reply.status(404).send({ error: "card not found" });
+    }
+    return card;
   });
 
   // Create a new card (for agent/external integration)

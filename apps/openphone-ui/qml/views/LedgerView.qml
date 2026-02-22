@@ -9,6 +9,8 @@ Item {
     // ── Live ledger model from WebSocketClient ──
     property var ledgerModel: null
 
+    signal ledgerEntryClicked(string cardId)
+
     // ── Relative timestamp formatter ──
     function formatRelativeTime(ts) {
         var date = new Date(ts)
@@ -51,6 +53,19 @@ Item {
             delegate: Item {
                 width: ListView.view.width
                 height: entryColumn.implicitHeight
+
+                property bool isCardLinked: model.refType === "card" && (model.refId || "").length > 0
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: parent.isCardLinked
+                    cursorShape: parent.isCardLinked ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: {
+                        if (parent.isCardLinked && model.refId) {
+                            root.ledgerEntryClicked(model.refId)
+                        }
+                    }
+                }
 
                 ColumnLayout {
                     id: entryColumn

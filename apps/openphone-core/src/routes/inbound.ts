@@ -1,5 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 import { runInboundTurn } from "../agent/loop.js";
+import {
+  createInboundDebouncer,
+  runSerializedForKey,
+  createSemaphore,
+} from "../inbound/index.js";
 
 interface GmailMessage {
   id?: string;
@@ -22,7 +27,66 @@ interface GmailHookPayload {
   messages?: GmailMessage[];
 }
 
+export interface GmailInboundItem {
+  eventDescription: string;
+  messages: GmailMessage[];
+  account: string;
+  historyId: string;
+}
+
+const DEBOUNCE_MS = Number(process.env["INBOUND_DEBOUNCE_MS"]) || 500;
+const MAX_CONCURRENT_INBOUND =
+  Number(process.env["INBOUND_MAX_CONCURRENT"]) || 5;
+
+const inboundSemaphore = createSemaphore(MAX_CONCURRENT_INBOUND);
+
+let inboundLogger: { info: (o: object, s: string) => void; error: (o: object, s: string) => void } = {
+  info: () => {},
+  error: () => {},
+};
+
+const gmailDebouncer = createInboundDebouncer<GmailInboundItem>({
+  debounceMs: DEBOUNCE_MS,
+  buildKey: (item) => (item.account ? `gmail:${item.account}` : null),
+  onFlush: async (items) => {
+    if (items.length === 0) return;
+    const account = items[0].account;
+    const key = `gmail:${account}`;
+    const combinedDescription =
+      items.length === 1
+        ? items[0].eventDescription
+        : items
+            .map((i) => i.eventDescription)
+            .filter(Boolean)
+            .join(" | ");
+    const sessionKey = `gmail:${account}`;
+
+    await runSerializedForKey(key, async () => {
+      await inboundSemaphore.acquire();
+      try {
+        const result = await runInboundTurn(combinedDescription, sessionKey);
+        inboundLogger.info(
+          { sessionKey, toolCallCount: result.toolCallCount },
+          "Inbound Gmail agent turn completed"
+        );
+      } catch (err) {
+        inboundLogger.error({ err, sessionKey }, "Inbound Gmail agent turn failed");
+      } finally {
+        inboundSemaphore.release();
+      }
+    });
+  },
+  onError: (err, items) => {
+    inboundLogger.error(
+      { err, account: items[0]?.account },
+      "Inbound Gmail debouncer flush error"
+    );
+  },
+});
+
 const inboundRoutes: FastifyPluginAsync = async (app) => {
+  inboundLogger = requestLogger(app);
+
   app.post<{
     Querystring: { token?: string };
     Body: GmailHookPayload;
@@ -53,21 +117,28 @@ const inboundRoutes: FastifyPluginAsync = async (app) => {
         ? `New Gmail: ${messages.length} message(s) — ${parts.join("; ")}`
         : `New Gmail activity (historyId ${historyId})`;
 
-    const sessionKey = `gmail:${account}:${historyId}`;
+    const item: GmailInboundItem = {
+      eventDescription,
+      messages,
+      account,
+      historyId,
+    };
 
-    runInboundTurn(eventDescription, sessionKey)
-      .then((result) => {
-        request.log.info(
-          { sessionKey, toolCallCount: result.toolCallCount },
-          "Inbound Gmail agent turn completed"
-        );
-      })
-      .catch((err) => {
-        request.log.error({ err, sessionKey }, "Inbound Gmail agent turn failed");
-      });
+    gmailDebouncer.enqueue(item).catch((err) => {
+      request.log.error({ err, account }, "Inbound Gmail enqueue failed");
+    });
 
     return reply.status(200).send({ ok: true, received: messages.length });
   });
 };
+
+function requestLogger(app: {
+  log: { info: (o: object, s: string) => void; error: (o: object, s: string) => void };
+}) {
+  return {
+    info: (o: object, s: string) => app.log.info(o, s),
+    error: (o: object, s: string) => app.log.error(o, s),
+  };
+}
 
 export default inboundRoutes;

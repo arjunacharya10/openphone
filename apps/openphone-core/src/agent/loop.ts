@@ -1,7 +1,7 @@
 import { completeSimple, streamSimple, getModel } from "@mariozechner/pi-ai";
 import type { Api, KnownProvider, Message, Model, ToolCall, TextContent } from "@mariozechner/pi-ai";
 import { loadAgentConfig, buildSystemPrompt } from "./context.js";
-import { tools, dispatchTool } from "./tools.js";
+import { tools, dispatchTool, type TurnContext } from "./tools.js";
 
 const MAX_ITERATIONS = 10;
 
@@ -14,6 +14,8 @@ export interface AgentTurnParams {
   history?: Message[];
   /** Optional card context for card-scoped conversations */
   cardContext?: { title: string; context: string };
+  /** Optional turn context (cardId from sessionKey) for tool dispatch */
+  turnContext?: TurnContext;
 }
 
 export interface AgentTurnResult {
@@ -105,7 +107,7 @@ export async function runAgentTurn(params: AgentTurnParams): Promise<AgentTurnRe
 
     for (const toolCall of toolCalls) {
       toolCallCount++;
-      const toolResult = await dispatchTool(toolCall);
+      const toolResult = await dispatchTool(toolCall, params.turnContext);
       messages.push(toolResult);
     }
   }
@@ -165,7 +167,7 @@ export async function runAgentTurnStream(
 
     for (const toolCall of toolCalls) {
       toolCallCount++;
-      const toolResult = await dispatchTool(toolCall);
+      const toolResult = await dispatchTool(toolCall, params.turnContext);
       messages.push(toolResult);
     }
   }
@@ -174,12 +176,26 @@ export async function runAgentTurnStream(
     .reverse()
     .find((m) => m.role === "assistant");
 
-  const text = lastAssistant
+  let text = lastAssistant
     ? (lastAssistant as { content: unknown[] }).content
         .filter((b): b is TextContent => (b as TextContent).type === "text")
         .map((b) => b.text)
         .join("")
     : "";
+
+  // Strip residual JSON/artifacts and known model garbage
+  text = text
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return true;
+      if (/\{\s*"role"\s*:/.test(t) && /\}\s*$/.test(t)) return false;
+      if (t === "ignore the message") return false;
+      if (/^<[^>]+>$/.test(t)) return false;
+      return true;
+    })
+    .join("\n")
+    .trim();
 
   return { text, history: messages, toolCallCount };
 }

@@ -19,6 +19,7 @@
         <file alias="qml/components/KindBadge.qml">components/KindBadge.qml</file>
         <file alias="qml/components/TimelineLine.qml">components/TimelineLine.qml</file>
         <file alias="qml/components/WebSocketClient.qml">components/WebSocketClient.qml</file>
+        <file alias="qml/components/ApiClient.qml">components/ApiClient.qml</file>
         <file alias="qml/components/ChatArea.qml">components/ChatArea.qml</file>
         <file alias="qml/components/ThinkingIndicator.qml">components/ThinkingIndicator.qml</file>
     </qresource>

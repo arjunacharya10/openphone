@@ -8,6 +8,8 @@ Item {
 
     property var chatModel: null
     property bool thinking: false
+    /** When false (card active), hide "Instruct or query" placeholder */
+    property bool showEmptyPlaceholder: true
 
     ColumnLayout {
         anchors.fill: parent
@@ -79,7 +81,7 @@ Item {
                 font.pixelSize: Theme.fontSizeMD
                 font.italic: true
                 color: Theme.dimText
-                visible: !root.chatModel || root.chatModel.count === 0
+                visible: root.showEmptyPlaceholder && (!root.chatModel || root.chatModel.count === 0)
             }
         }
     }

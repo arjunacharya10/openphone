@@ -14,6 +14,37 @@ Item {
     property ListModel chatModel: ListModel {}
     property bool thinking: false
 
+    /** Current session key for chat: "ui:chat:general" or "ui:chat:cardId" — used for thinking indicator routing */
+    property string activeSessionKey: "ui:chat:general"
+
+    /** Per-card chat models: cardId -> ListModel. General chat stays in chatModel. */
+    property var _chatModelsByCard: ({})
+
+    signal cardRemoved(string cardId)
+
+    function getChatModelForCard(cardId) {
+        if (!cardId || cardId === "") return chatModel
+        if (!_chatModelsByCard[cardId]) {
+            var m = Qt.createQmlObject("import QtQuick; ListModel {}", root, "chatModel_" + cardId)
+            _chatModelsByCard[cardId] = m
+        }
+        return _chatModelsByCard[cardId]
+    }
+
+    function populateChatForCard(cardId, messages) {
+        var m = getChatModelForCard(cardId)
+        m.clear()
+        if (!messages || !Array.isArray(messages)) return
+        for (var i = 0; i < messages.length; i++) {
+            var msg = messages[i]
+            if (!msg || msg.role === "toolResult") continue
+            if (msg.role === "user" || msg.role === "assistant") {
+                var text = root.extractTextFromMessage(msg)
+                m.append({ role: msg.role, text: text, streaming: false })
+            }
+        }
+    }
+
     function sendCardAction(cardId, action) {
         if (!root.connected) return
         socket.sendTextMessage(JSON.stringify({
@@ -26,7 +57,8 @@ Item {
     function sendChatMessage(message, cardId) {
         if (!root.connected) return
         root.thinking = true
-        root.chatModel.append({ role: "user", text: message })
+        var targetModel = root.getChatModelForCard(cardId || "")
+        targetModel.append({ role: "user", text: message })
         socket.sendTextMessage(JSON.stringify({
             type: "chat:message",
             payload: { message: message, cardId: cardId || undefined },
@@ -92,7 +124,7 @@ Item {
                 }
                 break
 
-            case "card:removed":
+            case "card:removed": {
                 var removeId = event.payload.id
                 for (var j = 0; j < root.cardsModel.count; j++) {
                     if (root.cardsModel.get(j).id === removeId) {
@@ -100,7 +132,9 @@ Item {
                         break
                     }
                 }
+                root.cardRemoved(removeId)
                 break
+            }
 
             case "ledger:sync":
                 root.ledgerModel.clear()
@@ -121,33 +155,46 @@ Item {
                 break
 
             case "chat:delta": {
-                root.thinking = false
+                var sk = event.payload.sessionKey || "ui:chat:general"
+                if (sk === root.activeSessionKey) root.thinking = false
+                var target = sk === "ui:chat:general" ? root.chatModel : root.getChatModelForCard(sk.replace("ui:chat:", ""))
                 var delta = event.payload.delta || ""
-                if (root.chatModel.count > 0) {
-                    var last = root.chatModel.get(root.chatModel.count - 1)
+                if (target.count > 0) {
+                    var last = target.get(target.count - 1)
                     if (last.role === "assistant") {
-                        root.chatModel.setProperty(root.chatModel.count - 1, "text", last.text + delta)
+                        var accumulated = root.sanitizeChatText(last.text + delta)
+                        target.setProperty(target.count - 1, "text", accumulated)
                         break
                     }
                 }
-                root.chatModel.append({ role: "assistant", text: delta, streaming: true })
+                target.append({ role: "assistant", text: root.sanitizeChatText(delta), streaming: true })
                 break
             }
 
             case "chat:response": {
-                root.thinking = false
-                var fullText = event.payload.text || ""
-                if (root.chatModel.count > 0) {
-                    var lastIdx = root.chatModel.count - 1
-                    var lastMsg = root.chatModel.get(lastIdx)
-                    if (lastMsg.role === "assistant") {
-                        root.chatModel.setProperty(lastIdx, "text", fullText)
-                        root.chatModel.setProperty(lastIdx, "streaming", false)
+                var sk2 = event.payload.sessionKey || "ui:chat:general"
+                if (sk2 === root.activeSessionKey) root.thinking = false
+                var target2 = sk2 === "ui:chat:general" ? root.chatModel : root.getChatModelForCard(sk2.replace("ui:chat:", ""))
+                var fullText = root.sanitizeChatText(event.payload.text || "")
+                if (target2.count > 0) {
+                    var lastIdx2 = target2.count - 1
+                    var lastMsg2 = target2.get(lastIdx2)
+                    if (lastMsg2.role === "assistant") {
+                        if (fullText.length > 0) {
+                            target2.setProperty(lastIdx2, "text", fullText)
+                            target2.setProperty(lastIdx2, "streaming", false)
+                        } else {
+                            target2.remove(lastIdx2)
+                        }
                     } else {
-                        root.chatModel.append({ role: "assistant", text: fullText, streaming: false })
+                        if (fullText.length > 0) {
+                            target2.append({ role: "assistant", text: fullText, streaming: false })
+                        }
                     }
                 } else {
-                    root.chatModel.append({ role: "assistant", text: fullText, streaming: false })
+                    if (fullText.length > 0) {
+                        target2.append({ role: "assistant", text: fullText, streaming: false })
+                    }
                 }
                 break
             }
@@ -188,12 +235,64 @@ Item {
 
     function ledgerToRole(entry) {
         var details = entry.details || {}
-        var subject = details.subject || details.action || entry.kind
+        var refType = entry.refType || ""
+        var refId = entry.refId || ""
+        var subject
+        if (refType === "card" && (details.cardTitle || details.action)) {
+            subject = (details.cardTitle || "Card") + " — " + (details.action || details.subject || entry.kind)
+        } else {
+            subject = details.subject || details.action || entry.kind
+        }
         return {
             id: entry.id || "",
             kind: entry.kind || "",
+            refType: refType,
+            refId: refId,
             subject: subject,
             timestamp: entry.timestamp || new Date().toISOString()
+        }
+    }
+
+    function extractTextFromMessage(m) {
+        if (!m) return ""
+        var c = m.content
+        if (typeof c === "string") return root.sanitizeChatText(c)
+        if (!c) return ""
+        if (Array.isArray(c)) {
+            var out = ""
+            for (var j = 0; j < c.length; j++) {
+                var block = c[j]
+                if (block && block.type === "text" && block.text)
+                    out += block.text
+            }
+            return root.sanitizeChatText(out)
+        }
+        if (typeof c === "object" && c.text) return root.sanitizeChatText(c.text)
+        return ""
+    }
+
+    function sanitizeChatText(text) {
+        if (!text || typeof text !== "string") return ""
+        return text.split("\n").filter(function(line) {
+            var t = line.trim()
+            if (!t) return true
+            if (/\{\s*"role"\s*:/.test(t) && /\}\s*$/.test(t)) return false
+            if (t === "ignore the message") return false
+            if (/^<[^>]+>$/.test(t)) return false
+            return true
+        }).join("\n").trim()
+    }
+
+    function populateChat(messages) {
+        root.chatModel.clear()
+        if (!messages || !Array.isArray(messages)) return
+        for (var i = 0; i < messages.length; i++) {
+            var m = messages[i]
+            if (!m || m.role === "toolResult") continue
+            if (m.role === "user" || m.role === "assistant") {
+                var text = root.extractTextFromMessage(m)
+                root.chatModel.append({ role: m.role, text: text, streaming: false })
+            }
         }
     }
 

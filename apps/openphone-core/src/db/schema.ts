@@ -22,6 +22,14 @@ export const cards = sqliteTable(
   ]
 );
 
+// ── Chat session history (one row per session) ──
+
+export const chatSessions = sqliteTable("chat_sessions", {
+  sessionKey: text("session_key").primaryKey(),
+  historyJson: text("history_json").notNull().default("[]"),
+  updatedAt: text("updated_at").notNull(),
+});
+
 // ── Ledger ──
 
 export const ledger = sqliteTable(

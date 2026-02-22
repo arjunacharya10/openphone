@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import healthRoutes from "./routes/health.js";
 import cardRoutes from "./routes/cards.js";
+import chatRoutes from "./routes/chat.js";
 import wsRoutes from "./routes/ws.js";
 import inboundRoutes from "./routes/inbound.js";
 import { seedDemoData } from "./services/store.js";
@@ -13,6 +14,7 @@ const app = Fastify({ logger: true });
 await app.register(websocket);
 await app.register(healthRoutes);
 await app.register(cardRoutes);
+await app.register(chatRoutes);
 await app.register(wsRoutes);
 await app.register(inboundRoutes);
 

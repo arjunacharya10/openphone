@@ -15,21 +15,129 @@ Window {
     // ── Bind window dimensions to Theme for responsive scaling ──
     onWidthChanged: Theme.windowWidth = width
     onHeightChanged: Theme.windowHeight = height
-    Component.onCompleted: {
-        Theme.windowWidth = width
-        Theme.windowHeight = height
-    }
-
     // ── WebSocket client ──
     WebSocketClient {
         id: wsClient
+        activeSessionKey: root.activeSessionKey
+        onCardRemoved: function(cardId) {
+            if (activeChatContext && activeChatContext.cardId === cardId) {
+                if (wsClient.cardsModel.count > 1) {
+                    currentCardIndex = 0
+                    var c = wsClient.cardsModel.get(0)
+                    goToCardChat(wsClient.cardToRole ? wsClient.cardToRole(c) : c)
+                } else {
+                    goToRootChat()
+                }
+            }
+        }
     }
+
+    // ── API client for REST (cards, session history) ──
+    ApiClient {
+        id: apiClient
+        onCardFetched: function(card) {
+            _pendingLedgerCardId = ""
+            _pendingLedgerCard = card
+            for (var i = 0; i < wsClient.cardsModel.count; i++) {
+                if (wsClient.cardsModel.get(i).id === card.id) {
+                    root.currentCardIndex = i
+                    break
+                }
+            }
+            root.goToCardChat(card)
+        }
+        onSessionHistoryFetched: function(sessionKey, messages) {
+            if (sessionKey === "ui:chat:general") {
+                wsClient.populateChat(messages)
+            } else {
+                var cardId = sessionKey.replace(/^ui:chat:/, "")
+                if (cardId) wsClient.populateChatForCard(cardId, messages)
+            }
+            if (_pendingLedgerCard) {
+                viewIndex = 0
+                _pendingLedgerCard = null
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        Theme.windowWidth = width
+        Theme.windowHeight = height
+        apiClient.fetchSessionHistory("ui:chat:general")
+        if (wsClient.cardsModel.count > 0) {
+            currentCardIndex = 0
+            var c = wsClient.cardsModel.get(0)
+            goToCardChat(wsClient.cardToRole ? wsClient.cardToRole(c) : c)
+        }
+    }
+
+    Connections {
+        target: wsClient.cardsModel
+        function onCountChanged() {
+            if (wsClient.cardsModel.count > 0 && !activeChatContext) {
+                currentCardIndex = 0
+                var c = wsClient.cardsModel.get(0)
+                goToCardChat(wsClient.cardToRole ? wsClient.cardToRole(c) : c)
+            }
+        }
+    }
+
+    property var _pendingLedgerCardId: ""
+    property var _pendingLedgerCard: null
+
+    // ── Chat context: null = root (main chat), else { cardId, card } = card chat ──
+    property var activeChatContext: null
+
+    // ── Current card index in carousel (0-based); when cards exist, which card is shown ──
+    property int currentCardIndex: 0
+
+    // ── Session key for current chat (used by WebSocketClient to filter deltas) ──
+    property string activeSessionKey: activeChatContext ? ("ui:chat:" + (activeChatContext.cardId || activeChatContext.card?.id || "")) : "ui:chat:general"
 
     // ── View state: 0=Focus, 1=Ledger, 2=Calendar ──
     property int viewIndex: 0
 
+    onViewIndexChanged: {
+        if (viewIndex !== 0) {
+            activeChatContext = null
+        }
+    }
+
+    function goToRootChat() {
+        activeChatContext = null
+        currentCardIndex = 0
+        apiClient.fetchSessionHistory("ui:chat:general")
+    }
+
+    function goToCardChat(card) {
+        if (!card || !card.id) return
+        activeChatContext = { cardId: card.id, card: wsClient.cardToRole ? wsClient.cardToRole(card) : card }
+        apiClient.fetchSessionHistory("ui:chat:" + card.id)
+    }
+
     function cycleView() {
         viewIndex = (viewIndex + 1) % 3
+    }
+
+    // ── Effective card: from currentCarouselIndex when cards exist, else null ──
+    function getEffectiveCard() {
+        if (!wsClient.cardsModel || wsClient.cardsModel.count === 0) return null
+        if (currentCardIndex >= 0 && currentCardIndex < wsClient.cardsModel.count) {
+            return wsClient.cardsModel.get(currentCardIndex)
+        }
+        return null
+    }
+
+    function getEffectiveCardId() {
+        var card = getEffectiveCard()
+        return card ? card.id : ""
+    }
+
+    function onLedgerEntryClicked(cardId) {
+        if (!cardId) return
+        _pendingLedgerCardId = cardId
+        _pendingLedgerCard = null
+        apiClient.fetchCard(cardId)
     }
 
     ColumnLayout {
@@ -50,16 +158,25 @@ Window {
             currentIndex: root.viewIndex
 
             FocusView {
-                card: wsClient.cardsModel.count > 0 ? wsClient.cardsModel.get(0) : null
+                showCardActions: true
                 chatModel: wsClient.chatModel
                 thinking: wsClient.thinking
+                cardsModel: wsClient.cardsModel
+                wsClient: wsClient
+                currentCardIndex: root.currentCardIndex
                 onActionTriggered: function(cardId, action) {
                     wsClient.sendCardAction(cardId, action)
+                }
+                onCarouselIndexChanged: function(index) {
+                    root.currentCardIndex = index
+                    var c = wsClient.cardsModel.get(index)
+                    root.goToCardChat(wsClient.cardToRole ? wsClient.cardToRole(c) : c)
                 }
             }
 
             LedgerView {
                 ledgerModel: wsClient.ledgerModel
+                onLedgerEntryClicked: root.onLedgerEntryClicked(cardId)
             }
 
             CalendarView {
@@ -71,9 +188,7 @@ Window {
         InputBar {
             Layout.fillWidth: true
             onSubmitted: function(message) {
-                var cardId = root.viewIndex === 0 && wsClient.cardsModel.count > 0
-                    ? wsClient.cardsModel.get(0).id
-                    : ""
+                var cardId = root.viewIndex === 0 ? root.getEffectiveCardId() : ""
                 wsClient.sendChatMessage(message, cardId)
             }
         }

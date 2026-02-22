@@ -1,6 +1,6 @@
 import { Type } from "@mariozechner/pi-ai";
 import type { Tool, ToolCall, ToolResultMessage } from "@mariozechner/pi-ai";
-import { createCard, recordAction } from "../services/store.js";
+import { createCard, recordAction, dismissCard, getCardById } from "../services/store.js";
 import {
   appendUserContext,
   appendMemory,
@@ -45,6 +45,12 @@ export const tools: Tool[] = [
       sourceType: Type.Optional(Type.String()),
       sourceId: Type.Optional(Type.String()),
     }),
+  },
+  {
+    name: "dismiss_card",
+    description:
+      "Close the current card and return to main chat when the user's request is fully satisfied and no further action is needed. Call this when a card discussion reaches a natural end.",
+    parameters: Type.Object({}),
   },
   {
     name: "log_action",
@@ -123,14 +129,34 @@ export const tools: Tool[] = [
   },
 ];
 
+export interface TurnContext {
+  cardId?: string;
+  cardTitle?: string;
+}
+
 // ── Tool dispatch (what actually runs) ──
 
-export async function dispatchTool(toolCall: ToolCall): Promise<ToolResultMessage> {
+export async function dispatchTool(
+  toolCall: ToolCall,
+  turnContext?: TurnContext
+): Promise<ToolResultMessage> {
   let result: string;
   let isError = false;
 
   try {
     switch (toolCall.name) {
+      case "dismiss_card": {
+        const cardId = turnContext?.cardId;
+        if (!cardId) {
+          result = "No card context — dismiss_card only works when replying to a card.";
+          isError = true;
+          break;
+        }
+        const card = dismissCard(cardId);
+        result = card ? "Done." : "Card not found or already closed.";
+        break;
+      }
+
       case "create_card": {
         const args = toolCall.arguments;
         createCard({
@@ -148,11 +174,22 @@ export async function dispatchTool(toolCall: ToolCall): Promise<ToolResultMessag
 
       case "log_action": {
         const args = toolCall.arguments;
+        const refType =
+          turnContext?.cardId != null ? "card" : (args["refType"] ?? "agent");
+        const refId =
+          turnContext?.cardId ?? (args["refId"] ?? "none");
+        const cardTitle =
+          turnContext?.cardTitle ??
+          (refType === "card" ? getCardById(refId)?.title : undefined);
+        const details: Record<string, unknown> = {
+          subject: args["subject"],
+          ...(cardTitle && { cardTitle }),
+        };
         recordAction({
           kind: args["kind"],
-          refType: args["refType"] ?? "agent",
-          refId: args["refId"] ?? "none",
-          details: { subject: args["subject"] },
+          refType,
+          refId,
+          details,
         });
         result = "Action logged to ledger.";
         break;

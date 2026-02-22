@@ -5,6 +5,7 @@ import {
   getLedger,
   getCalendarEvents,
   actOnCard,
+  getCardById,
 } from "../services/store.js";
 import { runAgentTurnStream } from "../agent/loop.js";
 import {
@@ -77,14 +78,12 @@ const wsRoutes: FastifyPluginAsync = async (app) => {
             ? `ui:chat:${cardId}`
             : "ui:chat:general";
 
-          const cardContext = cardId
-            ? (() => {
-                const cards = getActiveCards();
-                const card = cards.find((c) => c.id === cardId);
-                return card
-                  ? { title: card.title, context: card.context }
-                  : undefined;
-              })()
+          const card = cardId ? getCardById(cardId) : undefined;
+          const cardContext = card
+            ? { title: card.title, context: card.context }
+            : undefined;
+          const turnContext = cardId
+            ? { cardId, cardTitle: card?.title }
             : undefined;
 
           withSessionLock(sessionKey, async () => {
@@ -95,23 +94,23 @@ const wsRoutes: FastifyPluginAsync = async (app) => {
                 message,
                 history,
                 cardContext,
+                turnContext,
               },
               (delta) => {
                 broadcast({
                   type: "chat:delta",
-                  payload: { delta },
+                  payload: { delta, sessionKey },
                   timestamp: Date.now(),
                 });
               }
             );
             setSessionHistory(sessionKey, result.history);
-            if (result.text) {
-              broadcast({
-                type: "chat:response",
-                payload: { text: result.text },
-                timestamp: Date.now(),
-              });
-            }
+            // Always broadcast so streamed content is replaced (avoids residual text when extraction yields empty)
+            broadcast({
+              type: "chat:response",
+              payload: { text: result.text ?? "", sessionKey },
+              timestamp: Date.now(),
+            });
           }).catch((err) => {
             request.log.error({ err }, "Agent turn failed");
           });

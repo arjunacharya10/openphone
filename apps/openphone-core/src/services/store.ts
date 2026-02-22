@@ -163,6 +163,47 @@ export function actOnCard(
   return card;
 }
 
+/** Dismiss a card by id (agent-initiated). Updates status, broadcasts removal, no ledger entry. */
+export function dismissCard(cardId: string): Card | undefined {
+  const rows = db
+    .select()
+    .from(cardsTable)
+    .where(eq(cardsTable.id, cardId))
+    .all();
+
+  if (rows.length === 0) return undefined;
+  const row = rows[0];
+  if (row.status !== "active") return undefined;
+
+  db.update(cardsTable)
+    .set({ status: "dismissed" })
+    .where(eq(cardsTable.id, cardId))
+    .run();
+
+  const card = rowToCard({ ...row, status: "dismissed" });
+
+  broadcast({
+    type: "card:removed",
+    payload: { id: cardId, action: "dismiss" },
+    timestamp: Date.now(),
+  });
+
+  return card;
+}
+
+/** Fetch a single card by id (including non-active). */
+export function getCardById(cardId: string): Card | undefined {
+  const rows = db
+    .select()
+    .from(cardsTable)
+    .where(eq(cardsTable.id, cardId))
+    .limit(1)
+    .all();
+
+  if (rows.length === 0) return undefined;
+  return rowToCard(rows[0]);
+}
+
 // ── Ledger operations ──
 
 export function getLedger(): LedgerEntry[] {
