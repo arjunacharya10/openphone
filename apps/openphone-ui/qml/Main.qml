@@ -51,6 +51,8 @@ Window {
 
             FocusView {
                 card: wsClient.cardsModel.count > 0 ? wsClient.cardsModel.get(0) : null
+                chatModel: wsClient.chatModel
+                thinking: wsClient.thinking
                 onActionTriggered: function(cardId, action) {
                     wsClient.sendCardAction(cardId, action)
                 }
@@ -69,7 +71,10 @@ Window {
         InputBar {
             Layout.fillWidth: true
             onSubmitted: function(message) {
-                wsClient.sendChatMessage(message)
+                var cardId = root.viewIndex === 0 && wsClient.cardsModel.count > 0
+                    ? wsClient.cardsModel.get(0).id
+                    : ""
+                wsClient.sendChatMessage(message, cardId)
             }
         }
     }

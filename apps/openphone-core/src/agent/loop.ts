@@ -1,10 +1,6 @@
-import { completeSimple, getModel } from "@mariozechner/pi-ai";
+import { completeSimple, streamSimple, getModel } from "@mariozechner/pi-ai";
 import type { Api, KnownProvider, Message, Model, ToolCall, TextContent } from "@mariozechner/pi-ai";
-import {
-  loadAgentConfig,
-  loadUserContext,
-  buildSystemPrompt,
-} from "./context.js";
+import { loadAgentConfig, buildSystemPrompt } from "./context.js";
 import { tools, dispatchTool } from "./tools.js";
 
 const MAX_ITERATIONS = 10;
@@ -16,6 +12,8 @@ export interface AgentTurnParams {
   message: string;
   /** Prior conversation history for this session (pass [] for new sessions) */
   history?: Message[];
+  /** Optional card context for card-scoped conversations */
+  cardContext?: { title: string; context: string };
 }
 
 export interface AgentTurnResult {
@@ -50,6 +48,23 @@ function resolveModel(modelStr: string): Model<Api> {
     } satisfies Model<"openai-completions">;
   }
 
+  if (provider === "openrouter") {
+    const openrouterModelId = modelId.startsWith("openrouter/") ? modelId : `openrouter/${modelId}`;
+    return {
+      id: openrouterModelId,
+      name: openrouterModelId,
+      api: "openai-completions",
+      provider: "openrouter",
+      baseUrl: process.env["OPENROUTER_BASE_URL"] ?? "https://openrouter.ai/api/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 128000,
+      maxTokens: 4096,
+      headers: {},
+    } satisfies Model<"openai-completions">;
+  }
+
   // Built-in provider — let pi-ai resolve it
   return getModel(provider as KnownProvider, modelId as never);
 }
@@ -57,12 +72,8 @@ function resolveModel(modelStr: string): Model<Api> {
 // ── Agent turn ──
 
 export async function runAgentTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
-  const [config, userMd] = await Promise.all([
-    loadAgentConfig(),
-    loadUserContext(),
-  ]);
-
-  const systemPrompt = buildSystemPrompt(config, userMd);
+  const config = await loadAgentConfig();
+  const systemPrompt = await buildSystemPrompt(config);
   const model = resolveModel(config.model);
 
   const messages: Message[] = [
@@ -100,6 +111,65 @@ export async function runAgentTurn(params: AgentTurnParams): Promise<AgentTurnRe
   }
 
   // Extract final text from the last assistant message
+  const lastAssistant = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant");
+
+  const text = lastAssistant
+    ? (lastAssistant as { content: unknown[] }).content
+        .filter((b): b is TextContent => (b as TextContent).type === "text")
+        .map((b) => b.text)
+        .join("")
+    : "";
+
+  return { text, history: messages, toolCallCount };
+}
+
+/** Streaming agent turn; calls onDelta for each text chunk. */
+export async function runAgentTurnStream(
+  params: AgentTurnParams,
+  onDelta: (delta: string) => void
+): Promise<AgentTurnResult> {
+  const config = await loadAgentConfig();
+  const systemPrompt = await buildSystemPrompt(config, params.cardContext);
+  const model = resolveModel(config.model);
+
+  const messages: Message[] = [
+    ...(params.history ?? []),
+    {
+      role: "user",
+      content: params.message,
+      timestamp: Date.now(),
+    },
+  ];
+
+  let toolCallCount = 0;
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const s = streamSimple(model, { systemPrompt, messages, tools });
+
+    for await (const event of s) {
+      if (event.type === "text_delta") {
+        onDelta(event.delta);
+      }
+    }
+
+    const result = await s.result();
+    messages.push(result);
+
+    if (result.stopReason !== "toolUse") break;
+
+    const toolCalls = result.content.filter(
+      (b): b is ToolCall => b.type === "toolCall"
+    );
+
+    for (const toolCall of toolCalls) {
+      toolCallCount++;
+      const toolResult = await dispatchTool(toolCall);
+      messages.push(toolResult);
+    }
+  }
+
   const lastAssistant = [...messages]
     .reverse()
     .find((m) => m.role === "assistant");

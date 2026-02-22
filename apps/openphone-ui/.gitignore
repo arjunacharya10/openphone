@@ -1,6 +1,8 @@
 build/
 *.o
 moc_*
+qrc_*.cpp
 Makefile
 .qmake.stash
 openphone-ui
+openphone-ui.app/

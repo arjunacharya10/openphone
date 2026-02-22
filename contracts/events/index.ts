@@ -15,9 +15,21 @@ export type ServerEventType =
   | "card:removed"
   | "ledger:sync"
   | "action:recorded"
-  | "calendar:sync";
+  | "calendar:sync"
+  | "chat:delta"
+  | "chat:response";
 
 export type ClientEventType = "card:action" | "chat:message";
+
+/** chat:delta payload — streamed text chunk */
+export interface ChatDeltaPayload {
+  delta: string;
+}
+
+/** chat:response payload — final full text */
+export interface ChatResponsePayload {
+  text: string;
+}
 
 // ── Card domain ──
 

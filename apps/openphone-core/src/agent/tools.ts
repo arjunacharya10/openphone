@@ -1,7 +1,12 @@
 import { Type } from "@mariozechner/pi-ai";
 import type { Tool, ToolCall, ToolResultMessage } from "@mariozechner/pi-ai";
 import { createCard, recordAction } from "../services/store.js";
-import { appendUserContext } from "./context.js";
+import {
+  appendUserContext,
+  appendMemory,
+  appendDailyLog,
+  readMemoryFile,
+} from "./context.js";
 
 // ── Tool definitions (what the model sees) ──
 
@@ -68,12 +73,52 @@ export const tools: Tool[] = [
   {
     name: "update_user_context",
     description:
-      "Append new information about the user to user.md. " +
-      "Use this when you observe a preference, contact, or pattern worth remembering across sessions.",
+      "Append user preferences, contacts, or communication patterns to user.md. " +
+      "Use for things that describe the person you're helping.",
     parameters: Type.Object({
       content: Type.String({
         description: "Markdown content to append — be concise and factual",
       }),
+    }),
+  },
+  {
+    name: "update_memory",
+    description:
+      "Append long-term facts, decisions, or lessons to MEMORY.md. " +
+      "Use for significant things worth remembering across sessions.",
+    parameters: Type.Object({
+      content: Type.String({
+        description: "Markdown content to append — be concise and factual",
+      }),
+    }),
+  },
+  {
+    name: "append_daily_log",
+    description:
+      "Append to today's raw activity log (memory/YYYY-MM-DD.md). " +
+      "Use for recording what happened today — events, actions, notes.",
+    parameters: Type.Object({
+      content: Type.String({
+        description: "Markdown content to append",
+      }),
+    }),
+  },
+  {
+    name: "memory_get",
+    description:
+      "Read contents from MEMORY.md, user.md, or memory/YYYY-MM-DD.md. " +
+      "Use when the user asks to see the full log, pull up a date's log, or read a specific memory file. " +
+      "Optional from/lines for partial reads.",
+    parameters: Type.Object({
+      path: Type.String({
+        description: "Relative path, e.g. memory/2026-02-22.md, MEMORY.md, user.md",
+      }),
+      from: Type.Optional(
+        Type.Number({ description: "Start line (1-based)", minimum: 1 })
+      ),
+      lines: Type.Optional(
+        Type.Number({ description: "Number of lines to read", minimum: 1 })
+      ),
     }),
   },
 ];
@@ -116,6 +161,38 @@ export async function dispatchTool(toolCall: ToolCall): Promise<ToolResultMessag
       case "update_user_context": {
         await appendUserContext(toolCall.arguments["content"]);
         result = "User context updated.";
+        break;
+      }
+
+      case "update_memory": {
+        await appendMemory(toolCall.arguments["content"]);
+        result = "Memory updated.";
+        break;
+      }
+
+      case "append_daily_log": {
+        await appendDailyLog(toolCall.arguments["content"]);
+        result = "Daily log appended.";
+        break;
+      }
+
+      case "memory_get": {
+        const args = toolCall.arguments;
+        const pathArg = args["path"];
+        const fromArg = args["from"];
+        const linesArg = args["lines"];
+        const from =
+          fromArg != null ? Math.max(1, Math.floor(Number(fromArg))) : undefined;
+        const lines =
+          linesArg != null
+            ? Math.max(1, Math.floor(Number(linesArg)))
+            : undefined;
+        const res = await readMemoryFile({
+          path: typeof pathArg === "string" ? pathArg : String(pathArg ?? ""),
+          from,
+          lines,
+        });
+        result = JSON.stringify(res);
         break;
       }
 

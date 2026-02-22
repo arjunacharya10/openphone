@@ -6,7 +6,12 @@ import {
   getCalendarEvents,
   actOnCard,
 } from "../services/store.js";
-import { runAgentTurn } from "../agent/loop.js";
+import { runAgentTurnStream } from "../agent/loop.js";
+import {
+  getSessionHistory,
+  setSessionHistory,
+  withSessionLock,
+} from "../agent/sessions.js";
 
 const wsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/ws", { websocket: true }, (socket, request) => {
@@ -62,11 +67,44 @@ const wsRoutes: FastifyPluginAsync = async (app) => {
         }
 
         case "chat:message": {
-          const { message } = event.payload as { message: string };
-          request.log.info({ message }, "Chat message received");
+          const { message, cardId } = event.payload as {
+            message: string;
+            cardId?: string;
+          };
+          request.log.info({ message, cardId }, "Chat message received");
 
-          // Run agent turn async — response broadcast back via action:recorded / card:created
-          runAgentTurn({ sessionKey: "ui:chat", message }).then((result) => {
+          const sessionKey = cardId
+            ? `ui:chat:${cardId}`
+            : "ui:chat:general";
+
+          const cardContext = cardId
+            ? (() => {
+                const cards = getActiveCards();
+                const card = cards.find((c) => c.id === cardId);
+                return card
+                  ? { title: card.title, context: card.context }
+                  : undefined;
+              })()
+            : undefined;
+
+          withSessionLock(sessionKey, async () => {
+            const history = getSessionHistory(sessionKey);
+            const result = await runAgentTurnStream(
+              {
+                sessionKey,
+                message,
+                history,
+                cardContext,
+              },
+              (delta) => {
+                broadcast({
+                  type: "chat:delta",
+                  payload: { delta },
+                  timestamp: Date.now(),
+                });
+              }
+            );
+            setSessionHistory(sessionKey, result.history);
             if (result.text) {
               broadcast({
                 type: "chat:response",

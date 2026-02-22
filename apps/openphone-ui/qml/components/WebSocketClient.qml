@@ -11,6 +11,8 @@ Item {
     property ListModel cardsModel: ListModel {}
     property ListModel ledgerModel: ListModel {}
     property ListModel calendarModel: ListModel {}
+    property ListModel chatModel: ListModel {}
+    property bool thinking: false
 
     function sendCardAction(cardId, action) {
         if (!root.connected) return
@@ -21,11 +23,13 @@ Item {
         }))
     }
 
-    function sendChatMessage(message) {
+    function sendChatMessage(message, cardId) {
         if (!root.connected) return
+        root.thinking = true
+        root.chatModel.append({ role: "user", text: message })
         socket.sendTextMessage(JSON.stringify({
             type: "chat:message",
-            payload: { message: message },
+            payload: { message: message, cardId: cardId || undefined },
             timestamp: Date.now()
         }))
     }
@@ -115,6 +119,38 @@ Item {
                     root.calendarModel.append(calendarToRole(event.payload[m]))
                 }
                 break
+
+            case "chat:delta": {
+                root.thinking = false
+                var delta = event.payload.delta || ""
+                if (root.chatModel.count > 0) {
+                    var last = root.chatModel.get(root.chatModel.count - 1)
+                    if (last.role === "assistant") {
+                        root.chatModel.setProperty(root.chatModel.count - 1, "text", last.text + delta)
+                        break
+                    }
+                }
+                root.chatModel.append({ role: "assistant", text: delta, streaming: true })
+                break
+            }
+
+            case "chat:response": {
+                root.thinking = false
+                var fullText = event.payload.text || ""
+                if (root.chatModel.count > 0) {
+                    var lastIdx = root.chatModel.count - 1
+                    var lastMsg = root.chatModel.get(lastIdx)
+                    if (lastMsg.role === "assistant") {
+                        root.chatModel.setProperty(lastIdx, "text", fullText)
+                        root.chatModel.setProperty(lastIdx, "streaming", false)
+                    } else {
+                        root.chatModel.append({ role: "assistant", text: fullText, streaming: false })
+                    }
+                } else {
+                    root.chatModel.append({ role: "assistant", text: fullText, streaming: false })
+                }
+                break
+            }
 
             default:
                 console.log("[ws] unhandled event type:", event.type)

@@ -3,6 +3,7 @@ import websocket from "@fastify/websocket";
 import healthRoutes from "./routes/health.js";
 import cardRoutes from "./routes/cards.js";
 import wsRoutes from "./routes/ws.js";
+import inboundRoutes from "./routes/inbound.js";
 import { seedDemoData } from "./services/store.js";
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -13,6 +14,7 @@ await app.register(websocket);
 await app.register(healthRoutes);
 await app.register(cardRoutes);
 await app.register(wsRoutes);
+await app.register(inboundRoutes);
 
 // Seed demo data for development
 seedDemoData();

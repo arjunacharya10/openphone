@@ -8,75 +8,91 @@ Item {
 
     // ── Live card from WebSocketClient (null = no active card) ──
     property var card: null
+    // ── Chat messages from WebSocketClient ──
+    property var chatModel: null
+    // ── True when waiting for first LLM token ──
+    property bool thinking: false
 
     signal actionTriggered(string cardId, string action)
 
-    // ── Empty state ──
-    Text {
-        anchors.centerIn: parent
-        text: "All handled."
-        font.pixelSize: Theme.fontSizeXL - 2
-        font.italic: true
-        font.weight: Font.Light
-        color: Theme.dimText
-        visible: root.card === null
-    }
-
-    // ── Card content ──
-    Item {
+    ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spacingLG
-        anchors.rightMargin: Theme.spacingLG
-        visible: root.card !== null
+        spacing: 0
 
-        ColumnLayout {
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.right: parent.right
-            spacing: Theme.spacingMD
+        // ── Chat area (fills space) ──
+        ChatArea {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            chatModel: root.chatModel
+            thinking: root.thinking
+        }
 
-            // ── Title ──
-            Text {
-                Layout.fillWidth: true
-                text: root.card ? root.card.title : ""
-                font.pixelSize: Theme.fontSizeXL
-                font.weight: Font.Light
-                lineHeight: 1.2
-                lineHeightMode: Text.ProportionalHeight
-                color: Theme.foreground
-                wrapMode: Text.WordWrap
-            }
+        // ── Empty state when no card ──
+        Text {
+            Layout.leftMargin: Theme.spacingLG
+            Layout.rightMargin: Theme.spacingLG
+            Layout.bottomMargin: Theme.spacingSM
+            text: "All handled."
+            font.pixelSize: Theme.fontSizeSM
+            font.italic: true
+            font.weight: Font.Light
+            color: Theme.dimText
+            visible: root.card === null
+        }
 
-            // ── Context ──
-            Text {
-                Layout.fillWidth: true
-                Layout.maximumWidth: parent.width * 0.95
-                text: root.card ? root.card.context : ""
-                font.pixelSize: Theme.fontSizeLG
-                font.weight: Font.Light
-                lineHeight: 1.6
-                lineHeightMode: Text.ProportionalHeight
-                color: Theme.muted
-                wrapMode: Text.WordWrap
-                visible: text.length > 0
-            }
+        // ── Card content when card present ──
+        Item {
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.spacingLG
+            Layout.rightMargin: Theme.spacingLG
+            Layout.bottomMargin: Theme.spacingMD
+            visible: root.card !== null
+            implicitHeight: cardColumn.implicitHeight
 
-            // ── Action buttons ──
-            Row {
+            ColumnLayout {
+                id: cardColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
                 spacing: Theme.spacingMD
-                Layout.topMargin: Theme.spacingXS
-                visible: root.card !== null
 
-                Repeater {
-                    model: root.card ? JSON.parse(root.card.actionsJson) : []
+                Text {
+                    Layout.fillWidth: true
+                    text: root.card ? root.card.title : ""
+                    font.pixelSize: Theme.fontSizeXL
+                    font.weight: Font.Light
+                    lineHeight: 1.2
+                    lineHeightMode: Text.ProportionalHeight
+                    color: Theme.foreground
+                    wrapMode: Text.WordWrap
+                }
 
-                    ActionButton {
-                        label: modelData.label
-                        // Derive variant from action name and position
-                        variant: modelData.action === "dismiss"
-                                 ? "dismiss"
-                                 : (index === 0 ? "primary" : "secondary")
-                        onClicked: root.actionTriggered(root.card.id, modelData.action)
+                Text {
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: parent.width * 0.95
+                    text: root.card ? root.card.context : ""
+                    font.pixelSize: Theme.fontSizeLG
+                    font.weight: Font.Light
+                    lineHeight: 1.6
+                    lineHeightMode: Text.ProportionalHeight
+                    color: Theme.muted
+                    wrapMode: Text.WordWrap
+                    visible: text.length > 0
+                }
+
+                Row {
+                    spacing: Theme.spacingMD
+                    Layout.topMargin: Theme.spacingXS
+
+                    Repeater {
+                        model: root.card ? JSON.parse(root.card.actionsJson) : []
+
+                        ActionButton {
+                            label: modelData.label
+                            variant: modelData.action === "dismiss"
+                                     ? "dismiss"
+                                     : (index === 0 ? "primary" : "secondary")
+                            onClicked: root.actionTriggered(root.card.id, modelData.action)
+                        }
                     }
                 }
             }
