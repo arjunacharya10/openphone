@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq, desc, sql } from "drizzle-orm";
 import type {
   Card,
   CardType,
@@ -8,28 +9,70 @@ import type {
   ActionKind,
   CalendarEvent,
 } from "../../../../contracts/events/index.js";
+import { db } from "../db/index.js";
+import {
+  cards as cardsTable,
+  ledger as ledgerTable,
+  calendarEvents as calendarEventsTable,
+} from "../db/schema.js";
 import { broadcast } from "../lib/broadcast.js";
 
-// ── In-memory state ──
-
-const cards: Card[] = [];
-const ledger: LedgerEntry[] = [];
-const calendarEvents: CalendarEvent[] = [];
-
-const PRIORITY_ORDER: Record<CardPriority, number> = {
-  high: 3,
-  medium: 2,
-  low: 1,
-};
-
 const MAX_LEDGER_ENTRIES = 50;
+
+// ── Row → domain object helpers ──
+
+function rowToCard(row: typeof cardsTable.$inferSelect): Card {
+  return {
+    id: row.id,
+    type: row.type as CardType,
+    title: row.title,
+    context: row.context,
+    priority: row.priority as CardPriority,
+    status: row.status as Card["status"],
+    actions: JSON.parse(row.actionsJson) as CardAction[],
+    sourceType: row.sourceType ?? undefined,
+    sourceId: row.sourceId ?? undefined,
+    createdAt: row.createdAt,
+  };
+}
+
+function rowToLedgerEntry(row: typeof ledgerTable.$inferSelect): LedgerEntry {
+  return {
+    id: row.id,
+    kind: row.kind as ActionKind,
+    refType: row.refType,
+    refId: row.refId,
+    details: JSON.parse(row.detailsJson) as Record<string, unknown>,
+    timestamp: row.timestamp,
+  };
+}
+
+function rowToCalendarEvent(
+  row: typeof calendarEventsTable.$inferSelect
+): CalendarEvent {
+  return {
+    id: row.id,
+    summary: row.summary,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    location: row.location ?? undefined,
+    allDay: row.allDay,
+  };
+}
 
 // ── Card operations ──
 
 export function getActiveCards(): Card[] {
-  return cards
-    .filter((c) => c.status === "active")
-    .sort((a, b) => PRIORITY_ORDER[b.priority] - PRIORITY_ORDER[a.priority]);
+  const rows = db
+    .select()
+    .from(cardsTable)
+    .where(eq(cardsTable.status, "active"))
+    .orderBy(
+      sql`CASE ${cardsTable.priority} WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END`
+    )
+    .all();
+
+  return rows.map(rowToCard);
 }
 
 export function createCard(opts: {
@@ -41,8 +84,26 @@ export function createCard(opts: {
   sourceType?: string;
   sourceId?: string;
 }): Card {
+  const id = randomUUID();
+  const createdAt = new Date().toISOString();
+
+  db.insert(cardsTable)
+    .values({
+      id,
+      type: opts.type,
+      title: opts.title,
+      context: opts.context ?? "",
+      priority: opts.priority ?? "medium",
+      status: "active",
+      actionsJson: JSON.stringify(opts.actions ?? []),
+      sourceType: opts.sourceType,
+      sourceId: opts.sourceId,
+      createdAt,
+    })
+    .run();
+
   const card: Card = {
-    id: randomUUID(),
+    id,
     type: opts.type,
     title: opts.title,
     context: opts.context ?? "",
@@ -51,10 +112,8 @@ export function createCard(opts: {
     actions: opts.actions ?? [],
     sourceType: opts.sourceType,
     sourceId: opts.sourceId,
-    createdAt: new Date().toISOString(),
+    createdAt,
   };
-
-  cards.push(card);
 
   broadcast({
     type: "card:created",
@@ -69,10 +128,24 @@ export function actOnCard(
   cardId: string,
   action: string
 ): Card | undefined {
-  const card = cards.find((c) => c.id === cardId);
-  if (!card || card.status !== "active") return undefined;
+  const rows = db
+    .select()
+    .from(cardsTable)
+    .where(eq(cardsTable.id, cardId))
+    .all();
 
-  card.status = action === "dismiss" ? "dismissed" : "acted";
+  if (rows.length === 0) return undefined;
+  const row = rows[0];
+  if (row.status !== "active") return undefined;
+
+  const newStatus = action === "dismiss" ? "dismissed" : "acted";
+
+  db.update(cardsTable)
+    .set({ status: newStatus })
+    .where(eq(cardsTable.id, cardId))
+    .run();
+
+  const card = rowToCard({ ...row, status: newStatus });
 
   recordAction({
     kind: "user_action",
@@ -93,7 +166,14 @@ export function actOnCard(
 // ── Ledger operations ──
 
 export function getLedger(): LedgerEntry[] {
-  return ledger.slice(0, MAX_LEDGER_ENTRIES);
+  const rows = db
+    .select()
+    .from(ledgerTable)
+    .orderBy(desc(ledgerTable.timestamp))
+    .limit(MAX_LEDGER_ENTRIES)
+    .all();
+
+  return rows.map(rowToLedgerEntry);
 }
 
 export function recordAction(opts: {
@@ -111,12 +191,16 @@ export function recordAction(opts: {
     timestamp: new Date().toISOString(),
   };
 
-  ledger.unshift(entry);
-
-  // Trim to max size
-  if (ledger.length > MAX_LEDGER_ENTRIES) {
-    ledger.length = MAX_LEDGER_ENTRIES;
-  }
+  db.insert(ledgerTable)
+    .values({
+      id: entry.id,
+      kind: entry.kind,
+      refType: entry.refType,
+      refId: entry.refId,
+      detailsJson: JSON.stringify(entry.details),
+      timestamp: entry.timestamp,
+    })
+    .run();
 
   broadcast({
     type: "action:recorded",
@@ -130,13 +214,28 @@ export function recordAction(opts: {
 // ── Calendar operations ──
 
 export function getCalendarEvents(): CalendarEvent[] {
-  return calendarEvents;
+  const rows = db
+    .select()
+    .from(calendarEventsTable)
+    .orderBy(calendarEventsTable.startTime)
+    .all();
+
+  return rows.map(rowToCalendarEvent);
 }
 
-// ── Seed demo data ──
+// ── Seed demo data (idempotent) ──
 
 export function seedDemoData(): void {
+  const existing = db
+    .select({ id: cardsTable.id })
+    .from(cardsTable)
+    .limit(1)
+    .all();
+
+  if (existing.length > 0) return;
+
   const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
 
   // Demo cards
   createCard({
@@ -157,7 +256,8 @@ export function seedDemoData(): void {
   createCard({
     type: "email",
     title: "Re: Q4 planning deck — Alice needs feedback by EOD",
-    context: "From: alice@company.com\nThread has 4 replies, last activity 2h ago",
+    context:
+      "From: alice@company.com\nThread has 4 replies, last activity 2h ago",
     priority: "medium",
     actions: [
       { label: "Open thread", action: "open_thread" },
@@ -168,9 +268,7 @@ export function seedDemoData(): void {
   });
 
   // Demo calendar events
-  const todayStr = now.toISOString().split("T")[0];
-
-  calendarEvents.push(
+  const demoEvents = [
     {
       id: "cal-001",
       summary: "Standup with eng",
@@ -184,6 +282,7 @@ export function seedDemoData(): void {
       summary: "Deep work — API integration",
       startTime: `${todayStr}T13:00:00`,
       endTime: `${todayStr}T15:00:00`,
+      location: null,
       allDay: false,
     },
     {
@@ -193,34 +292,38 @@ export function seedDemoData(): void {
       endTime: `${todayStr}T16:30:00`,
       location: "Coffee bar",
       allDay: false,
-    }
-  );
+    },
+  ];
 
-  // Demo ledger entries (added directly to avoid double-broadcast from createCard)
-  const demoLedgerEntries: Omit<LedgerEntry, "id">[] = [
+  for (const ev of demoEvents) {
+    db.insert(calendarEventsTable).values(ev).run();
+  }
+
+  // Demo ledger entries
+  const demoLedger = [
     {
-      kind: "ingest",
+      kind: "ingest" as const,
       refType: "gmail_event",
       refId: "gmail-042",
       details: { subject: "Re: Q4 planning deck — feedback" },
       timestamp: new Date(now.getTime() - 15 * 60000).toISOString(),
     },
     {
-      kind: "sync",
+      kind: "sync" as const,
       refType: "calendar",
       refId: "primary",
       details: { subject: "Calendar synced — 3 events updated" },
       timestamp: new Date(now.getTime() - 45 * 60000).toISOString(),
     },
     {
-      kind: "auto_archive",
+      kind: "auto_archive" as const,
       refType: "gmail_event",
       refId: "gmail-039",
       details: { subject: "Newsletter from TechCrunch archived" },
       timestamp: new Date(now.getTime() - 90 * 60000).toISOString(),
     },
     {
-      kind: "auto_decline",
+      kind: "auto_decline" as const,
       refType: "calendar_event",
       refId: "cal-099",
       details: { subject: "Declined: optional team social" },
@@ -228,7 +331,16 @@ export function seedDemoData(): void {
     },
   ];
 
-  for (const entry of demoLedgerEntries) {
-    ledger.unshift({ id: randomUUID(), ...entry });
+  for (const entry of demoLedger) {
+    db.insert(ledgerTable)
+      .values({
+        id: randomUUID(),
+        kind: entry.kind,
+        refType: entry.refType,
+        refId: entry.refId,
+        detailsJson: JSON.stringify(entry.details),
+        timestamp: entry.timestamp,
+      })
+      .run();
   }
 }
