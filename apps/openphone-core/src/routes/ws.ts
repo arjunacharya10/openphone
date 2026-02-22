@@ -1,11 +1,12 @@
 import type { FastifyPluginAsync } from "fastify";
-import { addClient, removeClient, send } from "../lib/broadcast.js";
+import { addClient, removeClient, send, broadcast } from "../lib/broadcast.js";
 import {
   getActiveCards,
   getLedger,
   getCalendarEvents,
   actOnCard,
 } from "../services/store.js";
+import { runAgentTurn } from "../agent/loop.js";
 
 const wsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/ws", { websocket: true }, (socket, request) => {
@@ -63,7 +64,19 @@ const wsRoutes: FastifyPluginAsync = async (app) => {
         case "chat:message": {
           const { message } = event.payload as { message: string };
           request.log.info({ message }, "Chat message received");
-          // Agent integration will go here
+
+          // Run agent turn async — response broadcast back via action:recorded / card:created
+          runAgentTurn({ sessionKey: "ui:chat", message }).then((result) => {
+            if (result.text) {
+              broadcast({
+                type: "chat:response",
+                payload: { text: result.text },
+                timestamp: Date.now(),
+              });
+            }
+          }).catch((err) => {
+            request.log.error({ err }, "Agent turn failed");
+          });
           break;
         }
 
