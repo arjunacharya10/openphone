@@ -20,6 +20,11 @@ Window {
         Theme.windowHeight = height
     }
 
+    // ── WebSocket client ──
+    WebSocketClient {
+        id: wsClient
+    }
+
     // ── View state: 0=Focus, 1=Ledger, 2=Calendar ──
     property int viewIndex: 0
 
@@ -45,21 +50,26 @@ Window {
             currentIndex: root.viewIndex
 
             FocusView {
+                card: wsClient.cardsModel.count > 0 ? wsClient.cardsModel.get(0) : null
                 onActionTriggered: function(cardId, action) {
-                    console.log("Action:", action, "on card:", cardId)
+                    wsClient.sendCardAction(cardId, action)
                 }
             }
 
-            LedgerView {}
+            LedgerView {
+                ledgerModel: wsClient.ledgerModel
+            }
 
-            CalendarView {}
+            CalendarView {
+                calendarModel: wsClient.calendarModel
+            }
         }
 
         // ── Bottom input ──
         InputBar {
             Layout.fillWidth: true
             onSubmitted: function(message) {
-                console.log("User input:", message)
+                wsClient.sendChatMessage(message)
             }
         }
     }

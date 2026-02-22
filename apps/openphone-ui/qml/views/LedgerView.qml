@@ -6,31 +6,8 @@ import ".."
 Item {
     id: root
 
-    // ── Mock data (replace with model from backend later) ──
-    ListModel {
-        id: mockEntries
-
-        ListElement {
-            subject: "Re: Q4 planning deck — feedback"
-            timestamp: "2026-02-21T10:15:00Z"
-            kind: "ingest"
-        }
-        ListElement {
-            subject: "Calendar synced — 3 events updated"
-            timestamp: "2026-02-21T09:45:00Z"
-            kind: "sync"
-        }
-        ListElement {
-            subject: "Newsletter from TechCrunch archived"
-            timestamp: "2026-02-21T09:30:00Z"
-            kind: "auto_archive"
-        }
-        ListElement {
-            subject: "Declined: optional team social"
-            timestamp: "2026-02-21T08:00:00Z"
-            kind: "auto_decline"
-        }
-    }
+    // ── Live ledger model from WebSocketClient ──
+    property var ledgerModel: null
 
     // ── Relative timestamp formatter ──
     function formatRelativeTime(ts) {
@@ -67,7 +44,7 @@ Item {
         ListView {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            model: mockEntries
+            model: root.ledgerModel
             clip: true
             spacing: Theme.spacingLG
 
@@ -119,7 +96,7 @@ Item {
                 font.pixelSize: Math.round(12 * Theme.scale)
                 font.family: "monospace"
                 color: Theme.dimText
-                visible: mockEntries.count === 0
+                visible: !root.ledgerModel || root.ledgerModel.count === 0
             }
         }
     }

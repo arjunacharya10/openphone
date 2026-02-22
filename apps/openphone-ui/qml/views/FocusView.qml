@@ -6,21 +6,10 @@ import ".."
 Item {
     id: root
 
-    signal actionTriggered(int cardId, string action)
+    // ── Live card from WebSocketClient (null = no active card) ──
+    property var card: null
 
-    // ── Mock card data (replace with model from backend later) ──
-    property var mockCard: ({
-        id: 1,
-        title: "Standup with eng in 15 min — prep notes?",
-        context: "Daily sync at 10:30 AM\nAgenda: sprint progress, blockers, weekend deploy plan",
-        actions: [
-            { label: "Prep notes", action: "prep_notes", variant: "primary" },
-            { label: "Skip", action: "skip", variant: "secondary" },
-            { label: "Okay", action: "dismiss", variant: "dismiss" }
-        ]
-    })
-
-    property bool hasCard: true  // Toggle to test empty state
+    signal actionTriggered(string cardId, string action)
 
     // ── Empty state ──
     Text {
@@ -30,7 +19,7 @@ Item {
         font.italic: true
         font.weight: Font.Light
         color: Theme.dimText
-        visible: !root.hasCard
+        visible: root.card === null
     }
 
     // ── Card content ──
@@ -38,7 +27,7 @@ Item {
         anchors.fill: parent
         anchors.leftMargin: Theme.spacingLG
         anchors.rightMargin: Theme.spacingLG
-        visible: root.hasCard
+        visible: root.card !== null
 
         ColumnLayout {
             anchors.verticalCenter: parent.verticalCenter
@@ -49,7 +38,7 @@ Item {
             // ── Title ──
             Text {
                 Layout.fillWidth: true
-                text: root.mockCard.title
+                text: root.card ? root.card.title : ""
                 font.pixelSize: Theme.fontSizeXL
                 font.weight: Font.Light
                 lineHeight: 1.2
@@ -62,7 +51,7 @@ Item {
             Text {
                 Layout.fillWidth: true
                 Layout.maximumWidth: parent.width * 0.95
-                text: root.mockCard.context
+                text: root.card ? root.card.context : ""
                 font.pixelSize: Theme.fontSizeLG
                 font.weight: Font.Light
                 lineHeight: 1.6
@@ -76,14 +65,18 @@ Item {
             Row {
                 spacing: Theme.spacingMD
                 Layout.topMargin: Theme.spacingXS
+                visible: root.card !== null
 
                 Repeater {
-                    model: root.mockCard.actions
+                    model: root.card ? JSON.parse(root.card.actionsJson) : []
 
                     ActionButton {
                         label: modelData.label
-                        variant: modelData.variant
-                        onClicked: root.actionTriggered(root.mockCard.id, modelData.action)
+                        // Derive variant from action name and position
+                        variant: modelData.action === "dismiss"
+                                 ? "dismiss"
+                                 : (index === 0 ? "primary" : "secondary")
+                        onClicked: root.actionTriggered(root.card.id, modelData.action)
                     }
                 }
             }

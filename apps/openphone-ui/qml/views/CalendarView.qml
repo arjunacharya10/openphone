@@ -10,32 +10,8 @@ Item {
     readonly property int hoursEnd: 22
     readonly property int totalHours: hoursEnd - hoursStart
 
-    // ── Mock data (replace with model from backend later) ──
-    ListModel {
-        id: mockEvents
-
-        ListElement {
-            eventId: "1"
-            summary: "Standup with eng"
-            startHour: 10.5
-            endHour: 11.0
-            location: "Zoom"
-        }
-        ListElement {
-            eventId: "2"
-            summary: "Deep work — API integration"
-            startHour: 13.0
-            endHour: 15.0
-            location: ""
-        }
-        ListElement {
-            eventId: "3"
-            summary: "1:1 with Sarah"
-            startHour: 16.0
-            endHour: 16.5
-            location: "Coffee bar"
-        }
-    }
+    // ── Live calendar model from WebSocketClient ──
+    property var calendarModel: null
 
     ColumnLayout {
         anchors.fill: parent
@@ -93,7 +69,7 @@ Item {
 
             // ── Event blocks ──
             Repeater {
-                model: mockEvents
+                model: root.calendarModel
 
                 Rectangle {
                     x: borderLine.x + Theme.spacingSM + Theme.spacingXS
@@ -152,7 +128,7 @@ Item {
                 font.pixelSize: Math.round(12 * Theme.scale)
                 font.family: "monospace"
                 color: Theme.dimText
-                visible: mockEvents.count === 0
+                visible: !root.calendarModel || root.calendarModel.count === 0
             }
         }
     }
