@@ -1,28 +1,22 @@
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
+import healthRoutes from "./routes/health.js";
+import cardRoutes from "./routes/cards.js";
+import wsRoutes from "./routes/ws.js";
+import { seedDemoData } from "./services/store.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 
 const app = Fastify({ logger: true });
 
 await app.register(websocket);
+await app.register(healthRoutes);
+await app.register(cardRoutes);
+await app.register(wsRoutes);
 
-app.get("/health", async () => {
-  return { status: "ok" };
-});
-
-app.get("/ws", { websocket: true }, (socket) => {
-  const connected = JSON.stringify({
-    type: "connected",
-    payload: {},
-    timestamp: Date.now(),
-  });
-  socket.send(connected);
-
-  socket.on("message", (msg: Buffer) => {
-    socket.send(msg.toString());
-  });
-});
+// Seed demo data for development
+seedDemoData();
+app.log.info("Demo data seeded");
 
 app.listen({ port: PORT, host: "0.0.0.0" }, (err, address) => {
   if (err) {

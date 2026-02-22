@@ -1,5 +1,22 @@
 <RCC>
     <qresource prefix="/">
+        <!-- Module registration -->
+        <file alias="qml/qmldir">qmldir</file>
+
+        <!-- Root + Theme -->
         <file alias="qml/Main.qml">Main.qml</file>
+        <file alias="qml/Theme.qml">Theme.qml</file>
+
+        <!-- Views -->
+        <file alias="qml/views/FocusView.qml">views/FocusView.qml</file>
+        <file alias="qml/views/LedgerView.qml">views/LedgerView.qml</file>
+        <file alias="qml/views/CalendarView.qml">views/CalendarView.qml</file>
+
+        <!-- Components -->
+        <file alias="qml/components/ContextBand.qml">components/ContextBand.qml</file>
+        <file alias="qml/components/InputBar.qml">components/InputBar.qml</file>
+        <file alias="qml/components/ActionButton.qml">components/ActionButton.qml</file>
+        <file alias="qml/components/KindBadge.qml">components/KindBadge.qml</file>
+        <file alias="qml/components/TimelineLine.qml">components/TimelineLine.qml</file>
     </qresource>
 </RCC>
