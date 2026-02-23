@@ -4,5 +4,9 @@ dist/
 *.swp
 *.swo
 
+# Environment (secrets)
+.env
+.env.local
+
 # IDE / editor
 .claude/

@@ -104,7 +104,7 @@ Item {
                         ctx.beginPath()
                         ctx.rect(2, 1, s - 4, s - 4)
                         ctx.stroke()
-                    } else {
+                    } else if (viewMode === 2) {
                         // Calendar: grid icon
                         ctx.beginPath()
                         ctx.rect(2, 3, s - 4, s - 4)
@@ -120,6 +120,21 @@ Item {
                         ctx.beginPath()
                         ctx.moveTo(2, s * 0.45)
                         ctx.lineTo(s - 2, s * 0.45)
+                        ctx.stroke()
+                    } else {
+                        // Settings: gear icon
+                        var cx = s / 2, cy = s / 2
+                        var r1 = s * 0.35, r2 = s * 0.2
+                        var teeth = 8, i
+                        for (i = 0; i < teeth; i++) {
+                            var a = (i / teeth) * 2 * Math.PI - Math.PI / 2
+                            ctx.beginPath()
+                            ctx.moveTo(cx + r2 * Math.cos(a), cy + r2 * Math.sin(a))
+                            ctx.lineTo(cx + r1 * Math.cos(a), cy + r1 * Math.sin(a))
+                            ctx.stroke()
+                        }
+                        ctx.beginPath()
+                        ctx.arc(cx, cy, r2 * 0.6, 0, 2 * Math.PI)
                         ctx.stroke()
                     }
                 }

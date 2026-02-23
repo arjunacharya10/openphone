@@ -71,7 +71,7 @@ npm install
 
 ## Environment Variables
 
-All env vars apply to **openphone-core**. Set them in your shell (e.g. `export OPENROUTER_API_KEY=...`) or via a `.env` loader if you add one.
+All env vars apply to **openphone-core**. Copy `apps/openphone-core/.env.example` to `apps/openphone-core/.env` and set values. Shell `export` also works.
 
 | Variable | Description | Default |
 |----------|-------------|---------|

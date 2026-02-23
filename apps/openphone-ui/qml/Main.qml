@@ -96,7 +96,7 @@ Window {
     // ── Card opened from Ledger (separate view, back returns to ledger list) ──
     property var ledgerSelectedCard: null
 
-    // ── View state: 0=Focus, 1=Ledger, 2=Calendar ──
+    // ── View state: 0=Focus, 1=Ledger, 2=Calendar, 3=Settings ──
     property int viewIndex: 0
 
     onViewIndexChanged: {
@@ -116,7 +116,7 @@ Window {
     }
 
     function cycleView() {
-        viewIndex = (viewIndex + 1) % 3
+        viewIndex = (viewIndex + 1) % 4
     }
 
     // ── Effective card: current index when cards exist, else null ──
@@ -189,11 +189,13 @@ Window {
             CalendarView {
                 calendarModel: wsClient.calendarModel
             }
+
+            SettingsView {}
         }
 
         // ── Bottom input ──
         InputBar {
-            visible: root.viewIndex !== 1
+            visible: root.viewIndex === 0 || root.viewIndex === 2
             Layout.fillWidth: true
             onSubmitted: function(message) {
                 var cardId = (root.viewIndex === 0 || root.viewIndex === 1) ? root.getEffectiveCardId() : ""

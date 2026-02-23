@@ -11,11 +11,13 @@
         <file alias="qml/views/FocusView.qml">views/FocusView.qml</file>
         <file alias="qml/views/LedgerView.qml">views/LedgerView.qml</file>
         <file alias="qml/views/CalendarView.qml">views/CalendarView.qml</file>
+        <file alias="qml/views/SettingsView.qml">views/SettingsView.qml</file>
 
         <!-- Components -->
         <file alias="qml/components/ContextBand.qml">components/ContextBand.qml</file>
         <file alias="qml/components/InputBar.qml">components/InputBar.qml</file>
         <file alias="qml/components/ActionButton.qml">components/ActionButton.qml</file>
+        <file alias="qml/components/SettingsRow.qml">components/SettingsRow.qml</file>
         <file alias="qml/components/KindBadge.qml">components/KindBadge.qml</file>
         <file alias="qml/components/TimelineLine.qml">components/TimelineLine.qml</file>
         <file alias="qml/components/WebSocketClient.qml">components/WebSocketClient.qml</file>

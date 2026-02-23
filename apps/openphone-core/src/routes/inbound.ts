@@ -50,6 +50,7 @@ const gmailDebouncer = createInboundDebouncer<GmailInboundItem>({
   buildKey: (item) => (item.account ? `gmail:${item.account}` : null),
   onFlush: async (items) => {
     if (items.length === 0) return;
+    inboundLogger.info({ msg: "Reached here: debouncer flush", count: items.length, account: items[0]?.account });
     const account = items[0].account;
     const key = `gmail:${account}`;
     const combinedDescription =
@@ -62,6 +63,7 @@ const gmailDebouncer = createInboundDebouncer<GmailInboundItem>({
     const sessionKey = `gmail:${account}`;
 
     await runSerializedForKey(key, async () => {
+      inboundLogger.info({ msg: "Reached here: about to run agent", sessionKey, eventDescription: combinedDescription.slice(0, 80) });
       await inboundSemaphore.acquire();
       try {
         const result = await runInboundTurn(combinedDescription, sessionKey);
@@ -101,7 +103,9 @@ const inboundRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    request.log.info({ msg: "Reached here: POST /inbound/gmail" });
     const body = (request.body ?? {}) as GmailHookPayload;
+    request.log.info({ msg: "Payload:", account: body.account, historyId: body.historyId, messagesCount: (body.messages ?? []).length });
     const messages = body.messages ?? [];
     const account = body.account ?? "unknown";
     const historyId = body.historyId ?? "";
