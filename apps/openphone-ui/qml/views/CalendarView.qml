@@ -125,7 +125,7 @@ Item {
             Text {
                 anchors.centerIn: parent
                 text: "Clear day."
-                font.pixelSize: Math.round(12 * Theme.scale)
+                font.pixelSize: Math.round(12 * Theme.scaleFont)
                 font.family: "monospace"
                 color: Theme.dimText
                 visible: !root.calendarModel || root.calendarModel.count === 0

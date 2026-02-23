@@ -73,7 +73,7 @@ Item {
                 Layout.topMargin: Theme.spacingXS
                 Layout.bottomMargin: Theme.spacingLG
                 text: "Actions taken on your behalf."
-                font.pixelSize: Math.round(12 * Theme.scale)
+                font.pixelSize: Math.round(12 * Theme.scaleFont)
                 font.italic: true
                 font.weight: Font.Light
                 color: Theme.dimText
@@ -127,7 +127,7 @@ Item {
 
                         Text {
                             text: root.formatRelativeTime(model.timestamp)
-                            font.pixelSize: Math.round(10 * Theme.scale)
+                            font.pixelSize: Math.round(10 * Theme.scaleFont)
                             font.family: "monospace"
                             color: Theme.subtleText
                             anchors.verticalCenter: parent.verticalCenter
@@ -145,7 +145,7 @@ Item {
             Text {
                 anchors.centerIn: parent
                 text: "No records yet."
-                font.pixelSize: Math.round(12 * Theme.scale)
+                font.pixelSize: Math.round(12 * Theme.scaleFont)
                 font.family: "monospace"
                 color: Theme.dimText
                 visible: !root.ledgerModel || root.ledgerModel.count === 0

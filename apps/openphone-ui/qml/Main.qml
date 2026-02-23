@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window
 import "components"
 import "views"
 
@@ -12,8 +13,11 @@ Window {
     title: "OpenPhone"
     color: Theme.background
 
-    // ── Bind window dimensions to Theme for responsive scaling ──
-    onWidthChanged: Theme.windowWidth = width
+    // ── Bind window dimensions and screen density to Theme for responsive scaling ──
+    onWidthChanged: {
+        Theme.windowWidth = width
+        Theme.screenPixelDensity = Screen.pixelDensity
+    }
     onHeightChanged: Theme.windowHeight = height
     // ── WebSocket client ──
     WebSocketClient {

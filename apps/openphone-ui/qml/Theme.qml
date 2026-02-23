@@ -4,10 +4,25 @@ import QtQuick
 QtObject {
     id: theme
 
-    // ── Scale factor (bind to root window dimensions) ──
+    // ── Reference device (design target 480×960) ──
+    readonly property real refWidth: 480
+    readonly property real refHeight: 960
+    readonly property real refDpi: 96
+
     property real windowWidth: 480
     property real windowHeight: 960
-    readonly property real scale: Math.min(windowWidth / 480, windowHeight / 960)
+    property real screenPixelDensity: 3.78  // px/mm, set from Main (Screen.pixelDensity); fallback ~96 DPI
+
+    // ── Layout scale: min 1.0 so UI never shrinks below design ──
+    readonly property real scale: Math.max(1.0, Math.min(windowWidth / refWidth, windowHeight / refHeight))
+
+    // ── Font scale: DPI-aware, min 1.0 so text stays readable on all screens ──
+    readonly property real scaleFont: {
+        var dpi = screenPixelDensity > 0 ? screenPixelDensity * 25.4 : refDpi
+        var rw = (windowWidth * refDpi) / (dpi * refWidth)
+        var rh = (windowHeight * refDpi) / (dpi * refHeight)
+        return Math.max(1.0, Math.min(rw, rh))
+    }
 
     // ── Colors ──
     readonly property color background:    "#121110"
@@ -22,12 +37,12 @@ QtObject {
     readonly property color kindBadgeBg:   "#1F1E1D"
     readonly property color kindBadgeText: "#777777"
 
-    // ── Font sizes (scaled) ──
-    readonly property int fontSizeXS: Math.round(9  * scale)
-    readonly property int fontSizeSM: Math.round(11 * scale)
-    readonly property int fontSizeMD: Math.round(13 * scale)
-    readonly property int fontSizeLG: Math.round(14 * scale)
-    readonly property int fontSizeXL: Math.round(22 * scale)
+    // ── Font sizes (DPI-aware, scaleFont ensures readability) ──
+    readonly property int fontSizeXS: Math.round(9  * scaleFont)
+    readonly property int fontSizeSM: Math.round(11 * scaleFont)
+    readonly property int fontSizeMD: Math.round(13 * scaleFont)
+    readonly property int fontSizeLG: Math.round(14 * scaleFont)
+    readonly property int fontSizeXL: Math.round(22 * scaleFont)
 
     // ── Spacing (scaled) ──
     readonly property int spacingXS: Math.round(4  * scale)
