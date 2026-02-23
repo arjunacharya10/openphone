@@ -13,6 +13,7 @@ export type ServerEventType =
   | "cards:sync"
   | "card:created"
   | "card:removed"
+  | "card:cycle"
   | "ledger:sync"
   | "action:recorded"
   | "calendar:sync"

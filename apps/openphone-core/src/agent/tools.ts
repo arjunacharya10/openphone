@@ -1,6 +1,6 @@
 import { Type } from "@mariozechner/pi-ai";
 import type { Tool, ToolCall, ToolResultMessage } from "@mariozechner/pi-ai";
-import { createCard, recordAction, dismissCard, getCardById } from "../services/store.js";
+import { createCard, recordAction, dismissCard, skipCard, getCardById } from "../services/store.js";
 import {
   appendUserContext,
   appendMemory,
@@ -50,6 +50,12 @@ export const tools: Tool[] = [
     name: "dismiss_card",
     description:
       "Close the current card and return to main chat when the user's request is fully satisfied and no further action is needed. Call this when a card discussion reaches a natural end.",
+    parameters: Type.Object({}),
+  },
+  {
+    name: "skip_card",
+    description:
+      "Cycle to the next card when the user wants to skip the current one (e.g. says 'skip', 'not now', 'later', 'next'). Wraps to the first card after the last. Use when the user declines to act on the current card.",
     parameters: Type.Object({}),
   },
   {
@@ -154,6 +160,18 @@ export async function dispatchTool(
         }
         const card = dismissCard(cardId);
         result = card ? "Done." : "Card not found or already closed.";
+        break;
+      }
+
+      case "skip_card": {
+        const cardId = turnContext?.cardId;
+        if (!cardId) {
+          result = "No card context — skip_card only works when replying to a card.";
+          isError = true;
+          break;
+        }
+        const card = skipCard(cardId);
+        result = card ? "Cycled to next card." : "Card not found or already closed.";
         break;
       }
 

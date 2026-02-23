@@ -21,13 +21,21 @@ Window {
         activeSessionKey: root.activeSessionKey
         onCardRemoved: function(cardId) {
             if (activeChatContext && activeChatContext.cardId === cardId) {
-                if (wsClient.cardsModel.count > 1) {
-                    currentCardIndex = 0
-                    var c = wsClient.cardsModel.get(0)
+                if (wsClient.cardsModel.count > 0) {
+                    currentCardIndex = Math.min(currentCardIndex, wsClient.cardsModel.count - 1)
+                    if (currentCardIndex < 0) currentCardIndex = 0
+                    var c = wsClient.cardsModel.get(currentCardIndex)
                     goToCardChat(wsClient.cardToRole ? wsClient.cardToRole(c) : c)
                 } else {
                     goToRootChat()
                 }
+            }
+        }
+        onCardCycleRequested: function() {
+            if (wsClient.cardsModel.count > 0) {
+                currentCardIndex = (currentCardIndex + 1) % wsClient.cardsModel.count
+                var c = wsClient.cardsModel.get(currentCardIndex)
+                goToCardChat(wsClient.cardToRole ? wsClient.cardToRole(c) : c)
             }
         }
     }
@@ -88,7 +96,7 @@ Window {
     // ── Chat context: null = root (main chat), else { cardId, card } = card chat ──
     property var activeChatContext: null
 
-    // ── Current card index in carousel (0-based); when cards exist, which card is shown ──
+    // ── Which card is shown (0-based); cycles when user skips ──
     property int currentCardIndex: 0
 
     // ── Session key for current chat (used by WebSocketClient to filter deltas) ──
@@ -105,7 +113,6 @@ Window {
 
     function goToRootChat() {
         activeChatContext = null
-        currentCardIndex = 0
         apiClient.fetchSessionHistory("ui:chat:general")
     }
 
@@ -119,13 +126,18 @@ Window {
         viewIndex = (viewIndex + 1) % 3
     }
 
-    // ── Effective card: from currentCarouselIndex when cards exist, else null ──
+    // ── Effective card: current index when cards exist, else null ──
     function getEffectiveCard() {
         if (!wsClient.cardsModel || wsClient.cardsModel.count === 0) return null
-        if (currentCardIndex >= 0 && currentCardIndex < wsClient.cardsModel.count) {
-            return wsClient.cardsModel.get(currentCardIndex)
-        }
-        return null
+        if (currentCardIndex < 0 || currentCardIndex >= wsClient.cardsModel.count) return wsClient.cardsModel.get(0)
+        return wsClient.cardsModel.get(currentCardIndex)
+    }
+
+    function cycleToNextCard() {
+        if (!wsClient.cardsModel || wsClient.cardsModel.count === 0) return
+        currentCardIndex = (currentCardIndex + 1) % wsClient.cardsModel.count
+        var c = wsClient.cardsModel.get(currentCardIndex)
+        goToCardChat(wsClient.cardToRole ? wsClient.cardToRole(c) : c)
     }
 
     function getEffectiveCardId() {
@@ -167,11 +179,7 @@ Window {
                 onActionTriggered: function(cardId, action) {
                     wsClient.sendCardAction(cardId, action)
                 }
-                onCarouselIndexChanged: function(index) {
-                    root.currentCardIndex = index
-                    var c = wsClient.cardsModel.get(index)
-                    root.goToCardChat(wsClient.cardToRole ? wsClient.cardToRole(c) : c)
-                }
+                onSkipRequested: root.cycleToNextCard()
             }
 
             LedgerView {

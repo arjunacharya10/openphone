@@ -163,6 +163,29 @@ export function actOnCard(
   return card;
 }
 
+/** Request client to cycle to next card (skip = view next, wrap at end). No DB change. */
+export function skipCard(cardId: string): Card | undefined {
+  const rows = db
+    .select()
+    .from(cardsTable)
+    .where(eq(cardsTable.id, cardId))
+    .all();
+
+  if (rows.length === 0) return undefined;
+  const row = rows[0];
+  if (row.status !== "active") return undefined;
+
+  const card = rowToCard(row);
+
+  broadcast({
+    type: "card:cycle",
+    payload: {},
+    timestamp: Date.now(),
+  });
+
+  return card;
+}
+
 /** Dismiss a card by id (agent-initiated). Updates status, broadcasts removal, no ledger entry. */
 export function dismissCard(cardId: string): Card | undefined {
   const rows = db

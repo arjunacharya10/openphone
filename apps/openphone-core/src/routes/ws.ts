@@ -5,6 +5,7 @@ import {
   getLedger,
   getCalendarEvents,
   actOnCard,
+  skipCard,
   getCardById,
 } from "../services/store.js";
 import { runAgentTurnStream } from "../agent/loop.js";
@@ -62,7 +63,11 @@ const wsRoutes: FastifyPluginAsync = async (app) => {
             action: string;
           };
           if (cardId && action) {
-            actOnCard(cardId, action);
+            if (action === "skip") {
+              skipCard(cardId);
+            } else {
+              actOnCard(cardId, action);
+            }
           }
           break;
         }

@@ -21,6 +21,7 @@ Item {
     property var _chatModelsByCard: ({})
 
     signal cardRemoved(string cardId)
+    signal cardCycleRequested()
 
     function getChatModelForCard(cardId) {
         if (!cardId || cardId === "") return chatModel
@@ -133,6 +134,11 @@ Item {
                     }
                 }
                 root.cardRemoved(removeId)
+                break
+            }
+
+            case "card:cycle": {
+                root.cardCycleRequested()
                 break
             }
 

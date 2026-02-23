@@ -14,9 +14,12 @@ Item {
     property int currentCardIndex: 0
 
     signal actionTriggered(string cardId, string action)
-    signal carouselIndexChanged(int index)
+    signal skipRequested()
 
     readonly property bool hasCards: cardsModel && cardsModel.count > 0
+    property int _safeIndex: cardsModel && cardsModel.count > 0 ? Math.max(0, Math.min(currentCardIndex, cardsModel.count - 1)) : 0
+    property var topCard: cardsModel && cardsModel.count > 0 ? cardsModel.get(_safeIndex) : null
+    property var topCardActions: topCard ? (function() { try { return JSON.parse(topCard.actionsJson || "[]") } catch (e) { return [] } })() : []
 
     ColumnLayout {
         anchors.fill: parent
@@ -53,7 +56,7 @@ Item {
             }
         }
 
-        // ── Card chat view: full-page carousel (card + chat per page), swipe = next card+chat ──
+        // ── Card chat view: stack — one card at a time, Skip moves to back ──
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -63,7 +66,7 @@ Item {
                 anchors.fill: parent
                 spacing: 0
 
-                // Index indicator: "1/4" "2 cards pending"
+                // Index indicator: "2/5" "5 cards awaiting" + Skip
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: Theme.spacingSM
@@ -87,124 +90,92 @@ Item {
                     }
 
                     Item { Layout.fillWidth: true }
+
+                    ActionButton {
+                        label: "Skip"
+                        variant: "dismiss"
+                        onClicked: root.skipRequested()
+                    }
                 }
 
-                // Full-page carousel: each page = card header + that card's chat
-                ListView {
-                    id: cardCarousel
+                // Single card: header + chat (always top of stack)
+                Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    clip: true
-                    orientation: ListView.Vertical
-                    snapMode: ListView.SnapOneItem
-                    highlightRangeMode: ListView.StrictlyEnforceRange
-                    preferredHighlightBegin: 0
-                    preferredHighlightEnd: height
-                    model: root.cardsModel
+                    visible: root.topCard
 
-                    Component.onCompleted: {
-                        currentIndex = root.currentCardIndex
-                    }
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 0
 
-                    onCurrentIndexChanged: {
-                        if (currentIndex >= 0 && root.cardsModel && currentIndex < root.cardsModel.count) {
-                            root.carouselIndexChanged(currentIndex)
-                        }
-                    }
+                        // Card header
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: cardHeaderContent.implicitHeight + Theme.spacingLG * 2
 
-                    delegate: Item {
-                        id: cardDelegateItem
-                        width: cardCarousel.width
-                        height: cardCarousel.height
+                            ColumnLayout {
+                                id: cardHeaderContent
+                                anchors.fill: parent
+                                anchors.margins: Theme.spacingLG
+                                spacing: Theme.spacingMD
 
-                        property string cardId: model.id || ""
-                        property var cardActions: (function() {
-                            try { return JSON.parse(model.actionsJson || "[]") } catch (e) { return [] }
-                        })()
-                        property bool isActiveCard: cardCarousel.currentIndex === index
+                                Text {
+                                    Layout.fillWidth: true
+                                    Layout.maximumHeight: 48
+                                    text: root.topCard ? (root.topCard.title || "Card") : ""
+                                    font.pixelSize: Theme.fontSizeXL
+                                    font.weight: Font.Light
+                                    lineHeight: 1.2
+                                    lineHeightMode: Text.ProportionalHeight
+                                    color: Theme.foreground
+                                    wrapMode: Text.WordWrap
+                                    elide: Text.ElideRight
+                                    maximumLineCount: 2
+                                }
 
-                        ColumnLayout {
-                            anchors.fill: parent
-                            spacing: 0
+                                Text {
+                                    Layout.fillWidth: true
+                                    Layout.maximumHeight: 72
+                                    Layout.maximumWidth: parent.width * 0.95
+                                    text: root.topCard ? (root.topCard.context || "") : ""
+                                    font.pixelSize: Theme.fontSizeLG
+                                    font.weight: Font.Light
+                                    lineHeight: 1.6
+                                    lineHeightMode: Text.ProportionalHeight
+                                    color: Theme.muted
+                                    wrapMode: Text.WordWrap
+                                    elide: Text.ElideRight
+                                    maximumLineCount: 3
+                                    visible: root.topCard && (root.topCard.context || "").length > 0
+                                }
 
-                            // Card header (compact)
-                            Item {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: cardHeaderContent.implicitHeight + Theme.spacingLG * 2
-
-                                ColumnLayout {
-                                    id: cardHeaderContent
-                                    anchors.fill: parent
-                                    anchors.margins: Theme.spacingLG
+                                Row {
                                     spacing: Theme.spacingMD
+                                    Layout.topMargin: Theme.spacingSM
+                                    visible: root.showCardActions && root.topCard && root.topCardActions.length > 0
 
-                                    Text {
-                                        Layout.fillWidth: true
-                                        Layout.maximumHeight: 48
-                                        text: model.title || "Card"
-                                        font.pixelSize: Theme.fontSizeXL
-                                        font.weight: Font.Light
-                                        lineHeight: 1.2
-                                        lineHeightMode: Text.ProportionalHeight
-                                        color: Theme.foreground
-                                        wrapMode: Text.WordWrap
-                                        elide: Text.ElideRight
-                                        maximumLineCount: 2
-                                    }
+                                    Repeater {
+                                        model: root.topCardActions
 
-                                    Text {
-                                        Layout.fillWidth: true
-                                        Layout.maximumHeight: 72
-                                        Layout.maximumWidth: parent.width * 0.95
-                                        text: model.context || ""
-                                        font.pixelSize: Theme.fontSizeLG
-                                        font.weight: Font.Light
-                                        lineHeight: 1.6
-                                        lineHeightMode: Text.ProportionalHeight
-                                        color: Theme.muted
-                                        wrapMode: Text.WordWrap
-                                        elide: Text.ElideRight
-                                        maximumLineCount: 3
-                                        visible: (model.context || "").length > 0
-                                    }
-
-                                    Row {
-                                        spacing: Theme.spacingMD
-                                        Layout.topMargin: Theme.spacingSM
-                                        visible: root.showCardActions && cardDelegateItem.cardActions.length > 0
-
-                                        Repeater {
-                                            model: cardDelegateItem.cardActions
-
-                                            ActionButton {
-                                                label: modelData.label || ""
-                                                variant: modelData.action === "dismiss"
-                                                         ? "dismiss"
-                                                         : (index === 0 ? "primary" : "secondary")
-                                                onClicked: root.actionTriggered(cardDelegateItem.cardId, modelData.action)
-                                            }
+                                        ActionButton {
+                                            label: modelData.label || ""
+                                            variant: modelData.action === "dismiss"
+                                                     ? "dismiss"
+                                                     : (index === 0 ? "primary" : "secondary")
+                                            onClicked: root.actionTriggered(root.topCard.id, modelData.action)
                                         }
                                     }
                                 }
                             }
-
-                            // This card's chat
-                            ChatArea {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                chatModel: root.wsClient ? root.wsClient.getChatModelForCard(cardDelegateItem.cardId) : null
-                                thinking: root.thinking && cardDelegateItem.isActiveCard
-                                showEmptyPlaceholder: false
-                            }
                         }
-                    }
-                }
 
-                Connections {
-                    target: root
-                    function onCurrentCardIndexChanged() {
-                        if (cardCarousel.currentIndex !== root.currentCardIndex) {
-                            cardCarousel.currentIndex = root.currentCardIndex
+                        // This card's chat
+                        ChatArea {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            chatModel: root.topCard && root.wsClient ? root.wsClient.getChatModelForCard(root.topCard.id) : null
+                            thinking: root.thinking
+                            showEmptyPlaceholder: false
                         }
                     }
                 }
