@@ -44,15 +44,9 @@ Window {
     ApiClient {
         id: apiClient
         onCardFetched: function(card) {
-            _pendingLedgerCardId = ""
-            _pendingLedgerCard = card
-            for (var i = 0; i < wsClient.cardsModel.count; i++) {
-                if (wsClient.cardsModel.get(i).id === card.id) {
-                    root.currentCardIndex = i
-                    break
-                }
-            }
-            root.goToCardChat(card)
+            root.ledgerSelectedCard = wsClient.cardToRole ? wsClient.cardToRole(card) : card
+            viewIndex = 1
+            apiClient.fetchSessionHistory("ui:chat:" + card.id)
         }
         onSessionHistoryFetched: function(sessionKey, messages) {
             if (sessionKey === "ui:chat:general") {
@@ -60,10 +54,6 @@ Window {
             } else {
                 var cardId = sessionKey.replace(/^ui:chat:/, "")
                 if (cardId) wsClient.populateChatForCard(cardId, messages)
-            }
-            if (_pendingLedgerCard) {
-                viewIndex = 0
-                _pendingLedgerCard = null
             }
         }
     }
@@ -90,9 +80,6 @@ Window {
         }
     }
 
-    property var _pendingLedgerCardId: ""
-    property var _pendingLedgerCard: null
-
     // ── Chat context: null = root (main chat), else { cardId, card } = card chat ──
     property var activeChatContext: null
 
@@ -100,15 +87,21 @@ Window {
     property int currentCardIndex: 0
 
     // ── Session key for current chat (used by WebSocketClient to filter deltas) ──
-    property string activeSessionKey: activeChatContext ? ("ui:chat:" + (activeChatContext.cardId || activeChatContext.card?.id || "")) : "ui:chat:general"
+    property string activeSessionKey: {
+        if (ledgerSelectedCard && ledgerSelectedCard.id) return "ui:chat:" + ledgerSelectedCard.id
+        if (activeChatContext && activeChatContext.cardId) return "ui:chat:" + activeChatContext.cardId
+        return "ui:chat:general"
+    }
+
+    // ── Card opened from Ledger (separate view, back returns to ledger list) ──
+    property var ledgerSelectedCard: null
 
     // ── View state: 0=Focus, 1=Ledger, 2=Calendar ──
     property int viewIndex: 0
 
     onViewIndexChanged: {
-        if (viewIndex !== 0) {
-            activeChatContext = null
-        }
+        if (viewIndex !== 0) activeChatContext = null
+        if (viewIndex !== 1) ledgerSelectedCard = null
     }
 
     function goToRootChat() {
@@ -141,14 +134,14 @@ Window {
     }
 
     function getEffectiveCardId() {
+        if (viewIndex === 1 && ledgerSelectedCard && ledgerSelectedCard.id) return ledgerSelectedCard.id
+        if (activeChatContext && activeChatContext.cardId) return activeChatContext.cardId
         var card = getEffectiveCard()
         return card ? card.id : ""
     }
 
     function onLedgerEntryClicked(cardId) {
         if (!cardId) return
-        _pendingLedgerCardId = cardId
-        _pendingLedgerCard = null
         apiClient.fetchCard(cardId)
     }
 
@@ -184,7 +177,13 @@ Window {
 
             LedgerView {
                 ledgerModel: wsClient.ledgerModel
+                wsClient: wsClient
+                thinking: wsClient.thinking
+                selectedCard: root.ledgerSelectedCard
                 onLedgerEntryClicked: root.onLedgerEntryClicked(cardId)
+                onBackRequested: {
+                    root.ledgerSelectedCard = null
+                }
             }
 
             CalendarView {
@@ -194,9 +193,10 @@ Window {
 
         // ── Bottom input ──
         InputBar {
+            visible: root.viewIndex !== 1
             Layout.fillWidth: true
             onSubmitted: function(message) {
-                var cardId = root.viewIndex === 0 ? root.getEffectiveCardId() : ""
+                var cardId = (root.viewIndex === 0 || root.viewIndex === 1) ? root.getEffectiveCardId() : ""
                 wsClient.sendChatMessage(message, cardId)
             }
         }

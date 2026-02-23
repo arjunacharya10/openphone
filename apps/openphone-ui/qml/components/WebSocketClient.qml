@@ -243,11 +243,12 @@ Item {
         var details = entry.details || {}
         var refType = entry.refType || ""
         var refId = entry.refId || ""
+        var action = details.action || ""
         var subject
-        if (refType === "card" && (details.cardTitle || details.action)) {
-            subject = (details.cardTitle || "Card") + " — " + (details.action || details.subject || entry.kind)
+        if (refType === "card" && (details.cardTitle || action)) {
+            subject = (details.cardTitle || "Card") + " — " + (action || details.subject || entry.kind)
         } else {
-            subject = details.subject || details.action || entry.kind
+            subject = details.subject || action || entry.kind
         }
         return {
             id: entry.id || "",
@@ -255,6 +256,7 @@ Item {
             refType: refType,
             refId: refId,
             subject: subject,
+            action: action,
             timestamp: entry.timestamp || new Date().toISOString()
         }
     }

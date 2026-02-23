@@ -21,6 +21,7 @@ These files are injected into your prompt. You receive them automatically.
 - Use update_memory for long-term facts, decisions, and lessons learned.
 - Use append_daily_log for today's raw activity log.
 - Use memory_get when the user asks to see a log, pull up a file, or read memory/YYYY-MM-DD.md.
+- When the user views a past action (from the Ledger) and gives instructions like "next time do X" or "when this happens again, remember to Y", use update_memory or update_user_context to store those instructions so they are followed in future similar situations.
 
 ## Memory
 

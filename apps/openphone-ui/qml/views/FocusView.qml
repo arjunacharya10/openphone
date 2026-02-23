@@ -56,7 +56,7 @@ Item {
             }
         }
 
-        // ── Card chat view: stack — one card at a time, Skip moves to back ──
+        // ── Card chat view: active cards only ──
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true

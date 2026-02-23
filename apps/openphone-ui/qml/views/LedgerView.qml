@@ -6,10 +6,39 @@ import ".."
 Item {
     id: root
 
-    // ── Live ledger model from WebSocketClient ──
     property var ledgerModel: null
+    property var wsClient: null
+    property bool thinking: false
+    /** When set, show this card's chat (from ledger); back returns to list */
+    property var selectedCard: null
 
     signal ledgerEntryClicked(string cardId)
+    signal backRequested()
+
+    /** Find ledger entry for a card; return its action string */
+    function getActionForCard(cardId) {
+        if (!root.ledgerModel || !cardId) return ""
+        for (var i = 0; i < root.ledgerModel.count; i++) {
+            var e = root.ledgerModel.get(i)
+            if ((e.refId || "") === cardId) return e.action || ""
+        }
+        return ""
+    }
+
+    readonly property var actionLabels: ({
+        "archive": "Archived",
+        "mark_read": "Marked read",
+        "reply": "Replied",
+        "ignore": "Ignored",
+        "dismiss": "Dismissed",
+        "prep_notes": "Prep notes",
+        "skip": "Skipped"
+    })
+
+    function formatActionLabel(actionStr) {
+        if (!actionStr) return ""
+        return root.actionLabels[actionStr] || (actionStr.charAt(0).toUpperCase() + actionStr.slice(1).replace(/_/g, " "))
+    }
 
     // ── Relative timestamp formatter ──
     function formatRelativeTime(ts) {
@@ -24,23 +53,31 @@ Item {
         return Qt.formatDate(date, "MMM d")
     }
 
-    ColumnLayout {
+    StackLayout {
         anchors.fill: parent
-        anchors.leftMargin: Theme.spacingLG
-        anchors.rightMargin: Theme.spacingLG
-        anchors.topMargin: Theme.spacingXS
-        spacing: 0
+        currentIndex: root.selectedCard ? 1 : 0
 
-        // ── Header ──
-        Text {
-            Layout.topMargin: Theme.spacingXS
-            Layout.bottomMargin: Theme.spacingLG
-            text: "Actions taken on your behalf."
-            font.pixelSize: Math.round(12 * Theme.scale)
-            font.italic: true
-            font.weight: Font.Light
-            color: Theme.dimText
-        }
+        // ── List mode ──
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spacingLG
+            anchors.rightMargin: Theme.spacingLG
+            anchors.topMargin: Theme.spacingXS
+            spacing: 0
+
+            Text {
+                Layout.topMargin: Theme.spacingXS
+                Layout.bottomMargin: Theme.spacingLG
+                text: "Actions taken on your behalf."
+                font.pixelSize: Math.round(12 * Theme.scale)
+                font.italic: true
+                font.weight: Font.Light
+                color: Theme.dimText
+            }
 
         // ── Entry list ──
         ListView {
@@ -112,6 +149,88 @@ Item {
                 font.family: "monospace"
                 color: Theme.dimText
                 visible: !root.ledgerModel || root.ledgerModel.count === 0
+            }
+        }
+        }
+        }
+
+        // ── Card detail mode: past action + chat ──
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: root.selectedCard
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: Theme.spacingLG
+                Layout.rightMargin: Theme.spacingLG
+                Layout.topMargin: Theme.spacingSM
+                Layout.bottomMargin: Theme.spacingXS
+
+                ActionButton {
+                    label: "← Back"
+                    variant: "dismiss"
+                    onClicked: root.backRequested()
+                }
+                Item { Layout.fillWidth: true }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingLG
+                    spacing: Theme.spacingMD
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.selectedCard ? (root.selectedCard.title || "Card") : ""
+                        font.pixelSize: Theme.fontSizeXL
+                        font.weight: Font.Light
+                        color: Theme.foreground
+                        wrapMode: Text.WordWrap
+                        maximumLineCount: 2
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        Layout.maximumHeight: 60
+                        text: root.selectedCard ? (root.selectedCard.context || "") : ""
+                        font.pixelSize: Theme.fontSizeLG
+                        font.weight: Font.Light
+                        color: Theme.muted
+                        wrapMode: Text.WordWrap
+                        elide: Text.ElideRight
+                        maximumLineCount: 3
+                        visible: root.selectedCard && (root.selectedCard.context || "").length > 0
+                    }
+                    Row {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingSM
+                        visible: root.selectedCard && root.formatActionLabel(root.getActionForCard(root.selectedCard.id)).length > 0
+                        Text {
+                            text: "Action taken:"
+                            font.pixelSize: Theme.fontSizeSM
+                            color: Theme.dimText
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: root.selectedCard ? root.formatActionLabel(root.getActionForCard(root.selectedCard.id)) : ""
+                            font.pixelSize: Theme.fontSizeSM
+                            font.weight: Font.Medium
+                            color: Theme.foreground
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                    ChatArea {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        chatModel: root.selectedCard && root.wsClient ? root.wsClient.getChatModelForCard(root.selectedCard.id) : null
+                        thinking: root.thinking
+                        showEmptyPlaceholder: false
+                    }
+                }
             }
         }
     }
