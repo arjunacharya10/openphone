@@ -6,6 +6,8 @@ import ".."
 Item {
     id: root
 
+    signal lockRequested()
+
     property string profileName: ""
     property string profileEmail: ""
     property string profilePhone: ""
@@ -183,6 +185,26 @@ Item {
                     label: "Gmail"
                     iconType: "envelope"
                     onClicked: {}
+                }
+            }
+
+            // ── Lock card ──
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: Theme.spacingLG * 2 + 44
+                color: Theme.cardBg
+                border.color: Theme.cardBorder
+                border.width: 1
+                radius: Theme.radiusMD
+
+                SettingsRow {
+                    anchors.fill: parent
+                    anchors.leftMargin: 0
+                    anchors.rightMargin: 0
+                    label: "Lock Now"
+                    iconType: "lock"
+                    showChevron: false
+                    onClicked: root.lockRequested()
                 }
             }
         }

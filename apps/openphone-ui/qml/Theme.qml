@@ -54,4 +54,10 @@ QtObject {
     // ── Border radii ──
     readonly property int radiusSM: Math.round(2 * scale)
     readonly property int radiusMD: Math.round(3 * scale)
+    readonly property int radiusLG: Math.round(6 * scale)
+
+    // ── Glassmorphism accents ──
+    readonly property color glassBackground: Qt.rgba(cardBg.r, cardBg.g, cardBg.b, 0.78)
+    readonly property color glassBorder: Qt.rgba(border.r, border.g, border.b, 0.6)
+    readonly property real glassShadowOpacity: 0.35
 }

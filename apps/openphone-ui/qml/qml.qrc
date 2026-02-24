@@ -7,11 +7,15 @@
         <file alias="qml/Main.qml">Main.qml</file>
         <file alias="qml/Theme.qml">Theme.qml</file>
 
+        <!-- Assets -->
+        <file alias="qml/assets/wallpaper.jpg">assets/wallpaper.jpg</file>
+
         <!-- Views -->
         <file alias="qml/views/FocusView.qml">views/FocusView.qml</file>
         <file alias="qml/views/LedgerView.qml">views/LedgerView.qml</file>
         <file alias="qml/views/CalendarView.qml">views/CalendarView.qml</file>
         <file alias="qml/views/SettingsView.qml">views/SettingsView.qml</file>
+        <file alias="qml/views/LockScreen.qml">views/LockScreen.qml</file>
 
         <!-- Components -->
         <file alias="qml/components/ContextBand.qml">components/ContextBand.qml</file>

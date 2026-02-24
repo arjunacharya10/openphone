@@ -6,7 +6,7 @@ Item {
     id: root
 
     property string label: ""
-    property string iconType: ""   // "gear", "envelope"
+    property string iconType: ""   // "gear", "envelope", "lock"
     property bool showChevron: true
 
     signal clicked()
@@ -61,6 +61,16 @@ Item {
                         ctx.moveTo(1, 1)
                         ctx.lineTo(s / 2, s * 0.5)
                         ctx.lineTo(s - 1, 1)
+                        ctx.stroke()
+                    } else if (icon === "lock") {
+                        var bodyHeight = (s - 4) * 0.5
+                        var bodyTop = s - bodyHeight - 2
+                        ctx.beginPath()
+                        ctx.strokeRect(2, bodyTop, s - 4, bodyHeight)
+                        var cx = s / 2
+                        var radius = (s - 8) * 0.25
+                        ctx.beginPath()
+                        ctx.arc(cx, bodyTop, radius, Math.PI, 0, false)
                         ctx.stroke()
                     }
                 }

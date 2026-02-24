@@ -13,6 +13,9 @@ Window {
     title: "OpenPhone"
     color: Theme.background
 
+    // ── Lock state: true = show lock screen overlay ──
+    property bool isLocked: true
+
     // ── Bind window dimensions and screen density to Theme for responsive scaling ──
     onWidthChanged: {
         Theme.windowWidth = width
@@ -152,6 +155,8 @@ Window {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
+        visible: !root.isLocked
+        enabled: !root.isLocked
 
         // ── Top bar ──
         ContextBand {
@@ -194,17 +199,26 @@ Window {
                 calendarModel: wsClient.calendarModel
             }
 
-            SettingsView {}
+            SettingsView {
+                onLockRequested: root.isLocked = true
+            }
         }
 
         // ── Bottom input ──
         InputBar {
-            visible: root.viewIndex === 0 || root.viewIndex === 2
+            visible: !root.isLocked && (root.viewIndex === 0 || root.viewIndex === 2)
             Layout.fillWidth: true
             onSubmitted: function(message) {
                 var cardId = (root.viewIndex === 0 || root.viewIndex === 1) ? root.getEffectiveCardId() : ""
                 wsClient.sendChatMessage(message, cardId)
             }
         }
+    }
+
+    // ── Lock screen overlay ──
+    LockScreen {
+        anchors.fill: parent
+        visible: root.isLocked
+        onUnlocked: root.isLocked = false
     }
 }
