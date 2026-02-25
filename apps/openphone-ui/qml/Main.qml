@@ -16,6 +16,12 @@ Window {
     // ── Lock state: true = show lock screen overlay ──
     property bool isLocked: true
 
+    // ── Quick settings panel (pull-down from top, only when not locked) ──
+    property bool quickSettingsOpen: false
+    property real quickSettingsDragOffset: 0
+    readonly property real quickSettingsPanelHeight: Math.round(320 * Theme.scale)
+    property real quickSettingsPanelY: -320
+
     // ── Bind window dimensions and screen density to Theme for responsive scaling ──
     onWidthChanged: {
         Theme.windowWidth = width
@@ -68,6 +74,7 @@ Window {
     Component.onCompleted: {
         Theme.windowWidth = width
         Theme.windowHeight = height
+        quickSettingsPanelY = -quickSettingsPanelHeight
         apiClient.fetchSessionHistory("ui:chat:general")
         if (wsClient.cardsModel.count > 0) {
             currentCardIndex = 0
@@ -220,5 +227,91 @@ Window {
         anchors.fill: parent
         visible: root.isLocked
         onUnlocked: root.isLocked = false
+    }
+
+    // ── Quick settings overlay: pull down from top to open; panel is off-screen until dragged. Tap outside to close. ──
+    Item {
+        id: quickSettingsOverlay
+        anchors.fill: parent
+        z: 100
+        clip: false
+
+        // Dimmed backdrop below panel: only when panel is open; tap to close
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.topMargin: root.quickSettingsPanelHeight
+            anchors.bottom: parent.bottom
+            color: Qt.rgba(0, 0, 0, 0.35)
+            visible: root.quickSettingsOpen
+            opacity: root.quickSettingsOpen ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 180 } }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    root.quickSettingsOpen = false
+                    quickSettingsPanelAnim.from = root.quickSettingsPanelY
+                    quickSettingsPanelAnim.to = -root.quickSettingsPanelHeight
+                    quickSettingsPanelAnim.start()
+                }
+            }
+        }
+
+        // Drag strip at top: invisible, only for pull-down gesture (panel stays off-screen until dragged)
+        Item {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: Math.round(36 * Theme.scale)
+
+            property real pressY: 0
+
+            MouseArea {
+                anchors.fill: parent
+                onPressed: parent.pressY = mouse.y
+                onPositionChanged: {
+                    var dy = mouse.y - parent.pressY
+                    if (dy > 0) {
+                        root.quickSettingsDragOffset = Math.min(dy, root.quickSettingsPanelHeight)
+                        root.quickSettingsPanelY = -root.quickSettingsPanelHeight + root.quickSettingsDragOffset
+                    }
+                }
+                onReleased: {
+                    var threshold = root.quickSettingsPanelHeight * 0.4
+                    root.quickSettingsOpen = root.quickSettingsDragOffset > threshold
+                    root.quickSettingsDragOffset = 0
+                    quickSettingsPanelAnim.from = root.quickSettingsPanelY
+                    quickSettingsPanelAnim.to = root.quickSettingsOpen ? 0 : -root.quickSettingsPanelHeight
+                    quickSettingsPanelAnim.start()
+                }
+            }
+        }
+
+        // Panel: positioned off-screen (y negative) when closed; slides down when opened
+        QuickSettingsPanel {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            y: root.quickSettingsPanelY
+            height: root.quickSettingsPanelHeight
+            visible: root.quickSettingsPanelY > -root.quickSettingsPanelHeight
+
+            onCloseRequested: {
+                root.quickSettingsOpen = false
+                quickSettingsPanelAnim.from = root.quickSettingsPanelY
+                quickSettingsPanelAnim.to = -root.quickSettingsPanelHeight
+                quickSettingsPanelAnim.start()
+            }
+        }
+    }
+
+    NumberAnimation {
+        id: quickSettingsPanelAnim
+        target: root
+        property: "quickSettingsPanelY"
+        duration: 220
+        easing.type: Easing.InOutQuad
     }
 }

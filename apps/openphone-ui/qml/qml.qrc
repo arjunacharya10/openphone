@@ -9,6 +9,15 @@
 
         <!-- Assets -->
         <file alias="qml/assets/wallpaper.jpg">assets/wallpaper.jpg</file>
+        <file alias="qml/assets/icons/wifi.png">assets/icons/wifi.png</file>
+        <file alias="qml/assets/icons/bluetooth.png">assets/icons/bluetooth.png</file>
+        <file alias="qml/assets/icons/orientation.png">assets/icons/orientation.png</file>
+        <file alias="qml/assets/icons/brightness.png">assets/icons/brightness.png</file>
+        <file alias="qml/assets/icons/volume-on.png">assets/icons/volume-on.png</file>
+        <file alias="qml/assets/icons/volume-off.png">assets/icons/volume-off.png</file>
+        <file alias="qml/assets/icons/brightness-white.png">assets/icons/brightness-white.png</file>
+        <file alias="qml/assets/icons/volume-on-white.png">assets/icons/volume-on-white.png</file>
+        <file alias="qml/assets/icons/volume-off-white.png">assets/icons/volume-off-white.png</file>
 
         <!-- Views -->
         <file alias="qml/views/FocusView.qml">views/FocusView.qml</file>
@@ -16,6 +25,7 @@
         <file alias="qml/views/CalendarView.qml">views/CalendarView.qml</file>
         <file alias="qml/views/SettingsView.qml">views/SettingsView.qml</file>
         <file alias="qml/views/LockScreen.qml">views/LockScreen.qml</file>
+        <file alias="qml/views/QuickSettingsPanel.qml">views/QuickSettingsPanel.qml</file>
 
         <!-- Components -->
         <file alias="qml/components/ContextBand.qml">components/ContextBand.qml</file>
@@ -28,5 +38,8 @@
         <file alias="qml/components/ApiClient.qml">components/ApiClient.qml</file>
         <file alias="qml/components/ChatArea.qml">components/ChatArea.qml</file>
         <file alias="qml/components/ThinkingIndicator.qml">components/ThinkingIndicator.qml</file>
+        <file alias="qml/components/QuickToggle.qml">components/QuickToggle.qml</file>
+        <file alias="qml/components/VerticalSlider.qml">components/VerticalSlider.qml</file>
+        <file alias="qml/components/HorizontalSlider.qml">components/HorizontalSlider.qml</file>
     </qresource>
 </RCC>
