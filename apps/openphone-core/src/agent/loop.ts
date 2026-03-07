@@ -1,6 +1,7 @@
 import { completeSimple, streamSimple, getModel } from "@mariozechner/pi-ai";
 import type { Api, KnownProvider, Message, Model, ToolCall, TextContent } from "@mariozechner/pi-ai";
 import { loadAgentConfig, buildSystemPrompt } from "./context.js";
+import { shouldRunMemoryFlush, runMemoryFlush } from "../memory/flush.js";
 import { tools, dispatchTool, type TurnContext } from "./tools.js";
 
 const MAX_ITERATIONS = 10;
@@ -74,8 +75,11 @@ function resolveModel(modelStr: string): Model<Api> {
 // ── Agent turn ──
 
 export async function runAgentTurn(params: AgentTurnParams): Promise<AgentTurnResult> {
+  if (shouldRunMemoryFlush(params.sessionKey)) {
+    await runMemoryFlush(params.sessionKey);
+  }
   const config = await loadAgentConfig();
-  const systemPrompt = await buildSystemPrompt(config);
+  const systemPrompt = await buildSystemPrompt(config, undefined, params.message);
   const model = resolveModel(config.model);
 
   const messages: Message[] = [
@@ -132,8 +136,11 @@ export async function runAgentTurnStream(
   params: AgentTurnParams,
   onDelta: (delta: string) => void
 ): Promise<AgentTurnResult> {
+  if (shouldRunMemoryFlush(params.sessionKey)) {
+    await runMemoryFlush(params.sessionKey);
+  }
   const config = await loadAgentConfig();
-  const systemPrompt = await buildSystemPrompt(config, params.cardContext);
+  const systemPrompt = await buildSystemPrompt(config, params.cardContext, params.message);
   const model = resolveModel(config.model);
 
   const messages: Message[] = [

@@ -8,12 +8,11 @@ import {
   skipCard,
   getCardById,
 } from "../services/store.js";
-import { runAgentTurnStream } from "../agent/loop.js";
+import { dispatchStreamingTurn } from "../gateway/dispatch.js";
 import {
-  getSessionHistory,
-  setSessionHistory,
-  withSessionLock,
-} from "../agent/sessions.js";
+  buildUiCardSessionKey,
+  buildUiGeneralSessionKey,
+} from "../gateway/session-key.js";
 
 const wsRoutes: FastifyPluginAsync = async (app) => {
   app.get("/ws", { websocket: true }, (socket, request) => {
@@ -80,8 +79,8 @@ const wsRoutes: FastifyPluginAsync = async (app) => {
           request.log.info({ message, cardId }, "Chat message received");
 
           const sessionKey = cardId
-            ? `ui:chat:${cardId}`
-            : "ui:chat:general";
+            ? buildUiCardSessionKey(cardId)
+            : buildUiGeneralSessionKey();
 
           const card = cardId ? getCardById(cardId) : undefined;
           const cardContext = card
@@ -91,34 +90,32 @@ const wsRoutes: FastifyPluginAsync = async (app) => {
             ? { cardId, cardTitle: card?.title }
             : undefined;
 
-          withSessionLock(sessionKey, async () => {
-            const history = getSessionHistory(sessionKey);
-            const result = await runAgentTurnStream(
-              {
+          void (async () => {
+            try {
+              const result = await dispatchStreamingTurn({
                 sessionKey,
                 message,
-                history,
+                source: "ui",
                 cardContext,
                 turnContext,
-              },
-              (delta) => {
-                broadcast({
-                  type: "chat:delta",
-                  payload: { delta, sessionKey },
-                  timestamp: Date.now(),
-                });
-              }
-            );
-            setSessionHistory(sessionKey, result.history);
-            // Always broadcast so streamed content is replaced (avoids residual text when extraction yields empty)
-            broadcast({
-              type: "chat:response",
-              payload: { text: result.text ?? "", sessionKey },
-              timestamp: Date.now(),
-            });
-          }).catch((err) => {
-            request.log.error({ err }, "Agent turn failed");
-          });
+                onDelta: (delta) => {
+                  broadcast({
+                    type: "chat:delta",
+                    payload: { delta, sessionKey },
+                    timestamp: Date.now(),
+                  });
+                },
+              });
+              // Always broadcast so streamed content is replaced (avoids residual text when extraction yields empty)
+              broadcast({
+                type: "chat:response",
+                payload: { text: result.text ?? "", sessionKey },
+                timestamp: Date.now(),
+              });
+            } catch (err) {
+              request.log.error({ err }, "Agent turn failed");
+            }
+          })();
           break;
         }
 

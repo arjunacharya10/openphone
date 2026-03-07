@@ -10,3 +10,6 @@ dist/
 
 # IDE / editor
 .claude/
+
+# Memory engine runtime DB
+**/brain.db

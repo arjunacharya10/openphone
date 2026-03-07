@@ -45,6 +45,21 @@ export const ledger = sqliteTable(
   (table) => [index("idx_ledger_timestamp").on(table.timestamp)]
 );
 
+// ── Cron Jobs (ZeroClaw-style scheduled agent actions) ──
+
+export const cronJobs = sqliteTable("cron_jobs", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  schedule: text("schedule").notNull(),
+  sessionKey: text("session_key").notNull(),
+  message: text("message").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  lastRunAt: text("last_run_at"),
+  lastStatus: text("last_status"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 // ── Calendar Events ──
 
 export const calendarEvents = sqliteTable(

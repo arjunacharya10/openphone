@@ -1,0 +1,16 @@
+{
+  "model": "openrouter/free",
+  "offlineFallback": "ollama/llama3.2",
+  "gmail": {},
+  "cron": {},
+  "memory": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "text-embedding-3-small",
+    "vectorWeight": 0.7,
+    "keywordWeight": 0.3,
+    "maxResults": 6,
+    "minScore": 0.35,
+    "sync": { "onStartup": true, "watch": true }
+  }
+}
