@@ -106,13 +106,14 @@ export function buildGmailSessionKey(account: string, agentId?: string): string 
   return buildChannelSessionKey({ agentId, channel: "gmail", parts: [normalizedAccount] });
 }
 
-export function buildUiGeneralSessionKey(agentId?: string): string {
-  return buildChannelSessionKey({ agentId, channel: "ui", parts: ["general"] });
+export function buildVoiceSessionKey(deviceId: string, agentId?: string): string {
+  const id = (deviceId ?? "").trim() || "default";
+  return buildChannelSessionKey({ agentId, channel: "voice", parts: [id] });
 }
 
-export function buildUiCardSessionKey(cardId: string, agentId?: string): string {
-  const normalizedId = (cardId ?? "").trim() || "unknown";
-  return buildChannelSessionKey({ agentId, channel: "ui", parts: ["card", normalizedId] });
+export function buildWhatsAppSessionKey(phone: string, agentId?: string): string {
+  const normalized = (phone ?? "").replace(/\D/g, "") || "unknown";
+  return buildChannelSessionKey({ agentId, channel: "whatsapp", parts: [normalized] });
 }
 
 /**

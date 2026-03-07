@@ -1,4 +1,4 @@
-export type DispatchSource = "gmail" | "ui" | string;
+export type DispatchSource = "gmail" | "voice" | "whatsapp" | string;
 
 /**
  * Normalized text message that should be routed to the agent runtime.

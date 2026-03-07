@@ -7,6 +7,8 @@ import {
   appendDailyLog,
   readMemoryFile,
 } from "./context.js";
+import { setFact, deleteFact, getFacts } from "../memory/facts.js";
+import { searchGraph } from "../graph/client.js";
 
 // ── Tool definitions (what the model sees) ──
 
@@ -14,8 +16,8 @@ export const tools: Tool[] = [
   {
     name: "create_card",
     description:
-      "Surface a card to the user in the UI when you need their input or a decision. " +
-      "Use this when the action is ambiguous, high-stakes, or requires explicit approval.",
+      "Surface a decision card to the user when you need their input or approval. " +
+      "Use this when the action is ambiguous, high-stakes, or requires explicit confirmation.",
     parameters: Type.Object({
       type: Type.Union([
         Type.Literal("email"),
@@ -61,7 +63,7 @@ export const tools: Tool[] = [
   {
     name: "log_action",
     description:
-      "Record an autonomous action you took to the ledger (visible in the Ledger view). " +
+      "Record an autonomous action you took to the activity ledger. " +
       "Call this whenever you act on the user's behalf without surfacing a card.",
     parameters: Type.Object({
       kind: Type.Union([
@@ -113,6 +115,52 @@ export const tools: Tool[] = [
       content: Type.String({
         description: "Markdown content to append",
       }),
+    }),
+  },
+  {
+    name: "kg_search",
+    description:
+      "Search the knowledge graph for facts about the user, their contacts, or past events. " +
+      "Use this when you need to recall something specific that may not be in the current context window — " +
+      "e.g. 'what is Jane's company?', 'what are the user's travel preferences?', 'what happened with the board meeting?'.",
+    parameters: Type.Object({
+      query: Type.String({
+        description: "Natural language question or topic to search for",
+      }),
+      num_results: Type.Optional(
+        Type.Number({ description: "Max results to return (default 8)", minimum: 1, maximum: 20 })
+      ),
+    }),
+  },
+  {
+    name: "set_fact",
+    description:
+      "Store or update a structured fact about the user or their world. " +
+      "Use dotted-namespace keys like 'user.spouse', 'user.airline_preference', 'contact.jane.company'. " +
+      "Upserts — calling this with an existing key replaces the old value. " +
+      "Use this instead of free-text memory for discrete, queryable facts.",
+    parameters: Type.Object({
+      key: Type.String({
+        description: "Dotted namespace key, e.g. 'user.coffee_preference', 'contact.bob.email'",
+      }),
+      value: Type.String({
+        description: "The fact value, e.g. 'hates coffee', 'bob@example.com'",
+      }),
+    }),
+  },
+  {
+    name: "get_facts",
+    description:
+      "Retrieve all stored structured facts. Use when you need to check what is already known " +
+      "before updating, or when the user asks what you remember about them.",
+    parameters: Type.Object({}),
+  },
+  {
+    name: "delete_fact",
+    description:
+      "Remove a structured fact that is no longer true or relevant.",
+    parameters: Type.Object({
+      key: Type.String({ description: "The exact key to delete" }),
     }),
   },
   {
@@ -210,6 +258,38 @@ export async function dispatchTool(
           details,
         });
         result = "Action logged to ledger.";
+        break;
+      }
+
+      case "kg_search": {
+        const facts = await searchGraph(
+          String(toolCall.arguments["query"]),
+          Number(toolCall.arguments["num_results"] ?? 8)
+        );
+        result = facts.length
+          ? facts.map((f) => `- ${f.fact}`).join("\n")
+          : "(no relevant facts found in knowledge graph)";
+        break;
+      }
+
+      case "set_fact": {
+        const { key, value } = toolCall.arguments;
+        setFact(String(key), String(value));
+        result = `Fact stored: ${key} = ${value}`;
+        break;
+      }
+
+      case "get_facts": {
+        const facts = getFacts();
+        result = facts.length
+          ? facts.map((f) => `${f.key}: ${f.value}`).join("\n")
+          : "(no facts stored yet)";
+        break;
+      }
+
+      case "delete_fact": {
+        deleteFact(String(toolCall.arguments["key"]));
+        result = `Fact deleted: ${toolCall.arguments["key"]}`;
         break;
       }
 

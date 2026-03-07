@@ -2,7 +2,7 @@
 /**
  * Minimal CLI client for openphone-core control plane APIs.
  * Usage: npx tsx src/ctl/cli.ts <command> [--base-url URL] [--token TOKEN]
- * Commands: status, health, tools, cron, integrations, diag, config, memory-status, memory-search
+ * Commands: status, health, tools, cron, integrations, diag, config, memory-status, memory-search, facts
  */
 
 async function main(): Promise<void> {
@@ -75,14 +75,20 @@ async function main(): Promise<void> {
           console.error("memory-search requires --q <query>");
           process.exit(1);
         }
+        // Proxied through openphone-core to the Graphiti KG service
         const data = await fetcher(`/api/memory/search?q=${encodeURIComponent(q)}`);
+        console.log(JSON.stringify(data, null, 2));
+        break;
+      }
+      case "facts": {
+        const data = await fetcher("/api/memory/facts");
         console.log(JSON.stringify(data, null, 2));
         break;
       }
       default:
         console.error(
           "Usage: openphone-ctl <command> [--base-url URL] [--token TOKEN]\n" +
-            "Commands: status, health, tools, cron, integrations, diag, config, memory-status, memory-search\n" +
+            "Commands: status, health, tools, cron, integrations, diag, config, memory-status, memory-search, facts\n" +
             "Env: OPENPHONE_BASE_URL, OPENPHONE_CONTROL_TOKEN"
         );
         process.exit(1);

@@ -136,33 +136,25 @@ export async function readMemoryFile(params: {
   return { path: relPath, text: slice.join("\n") };
 }
 
-export async function loadSemanticMemory(query: string): Promise<string> {
-  if (process.env["OPENPHONE_MEMORY_ENABLED"] === "false") return "";
-  try {
-    const { search } = await import("../memory/search.js");
-    const results = await search(query, { maxResults: 6 });
-    if (results.length === 0) return "";
-    const lines = results.map(
-      (r) => `- [${r.path}:${r.startLine}-${r.endLine}] ${r.snippet}`
-    );
-    return ["## Relevant Memory (from search)", "", ...lines, ""].join("\n");
-  } catch {
-    return "";
-  }
-}
-
 export async function buildSystemPrompt(
   config: AgentConfig,
   cardContext?: { title: string; context: string },
   userMessage?: string
 ): Promise<string> {
-  const [soul, agents, userMd, memory, daily, semanticMem] = await Promise.all([
+  const [soul, agents, userMd, memory, daily, facts, kgMem] = await Promise.all([
     loadSoul(),
     loadAgents(),
     loadUserContext(),
     loadMemory(),
     loadDailyMemory(),
-    userMessage ? loadSemanticMemory(userMessage) : Promise.resolve(""),
+    import("../memory/facts.js").then(({ getFacts, formatFactsForPrompt }) =>
+      formatFactsForPrompt(getFacts())
+    ).catch(() => ""),
+    userMessage
+      ? import("../graph/client.js").then(({ searchGraph, formatKGForPrompt }) =>
+          searchGraph(userMessage).then(formatKGForPrompt)
+        ).catch(() => "")
+      : Promise.resolve(""),
   ]);
 
   const sections: string[] = [];
@@ -176,8 +168,12 @@ export async function buildSystemPrompt(
 
   sections.push("## User Context", "", userMd.trim() || "(no user context loaded yet)", "");
 
-  if (semanticMem) {
-    sections.push(semanticMem);
+  if (facts) {
+    sections.push(facts);
+  }
+
+  if (kgMem) {
+    sections.push(kgMem);
   }
 
   sections.push("## Memory", "");

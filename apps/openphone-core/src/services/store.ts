@@ -16,6 +16,7 @@ import {
   calendarEvents as calendarEventsTable,
 } from "../db/schema.js";
 import { broadcast } from "../lib/broadcast.js";
+import { publish } from "../lib/event-bus.js";
 
 const MAX_LEDGER_ENTRIES = 50;
 
@@ -120,6 +121,7 @@ export function createCard(opts: {
     payload: card,
     timestamp: Date.now(),
   });
+  publish({ type: "card:created", payload: card });
 
   return card;
 }
@@ -159,6 +161,7 @@ export function actOnCard(
     payload: { id: cardId, action },
     timestamp: Date.now(),
   });
+  publish({ type: "card:removed", payload: { id: cardId } });
 
   return card;
 }
@@ -210,6 +213,7 @@ export function dismissCard(cardId: string): Card | undefined {
     payload: { id: cardId, action: "dismiss" },
     timestamp: Date.now(),
   });
+  publish({ type: "card:removed", payload: { id: cardId } });
 
   return card;
 }
@@ -271,6 +275,7 @@ export function recordAction(opts: {
     payload: entry,
     timestamp: Date.now(),
   });
+  publish({ type: "ledger:entry", payload: entry });
 
   return entry;
 }

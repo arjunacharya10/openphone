@@ -27,7 +27,7 @@ export async function dispatchInboundMessage(
 
 /**
  * Streaming dispatch with per-session locking and history persistence.
- * Used by the UI WebSocket chat path.
+ * Used by conversation channels (voice, WhatsApp).
  */
 export async function dispatchStreamingTurn(
   params: StreamingTurnParams

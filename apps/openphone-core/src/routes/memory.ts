@@ -1,40 +1,45 @@
 import type { FastifyPluginAsync } from "fastify";
-import { createEmbeddingProvider } from "../memory/embeddings.js";
-import { search } from "../memory/search.js";
-import { ensureMemorySchema, openMemoryDb } from "../memory/schema.js";
-import { syncFiles } from "../memory/sync.js";
+import { searchGraph } from "../graph/client.js";
+import { deleteFact, getFacts, setFact } from "../memory/facts.js";
+import { openMemoryDb, ensureMemorySchema } from "../memory/schema.js";
+import { isGraphitiAvailable } from "../graph/client.js";
 
 const memoryRoutes: FastifyPluginAsync = async (app) => {
   app.get("/api/memory/status", async (_request, reply) => {
     const db = openMemoryDb();
     ensureMemorySchema(db);
-    const files = (db.prepare("SELECT COUNT(*) as c FROM files").get() as { c: number }).c;
-    const chunks = (db.prepare("SELECT COUNT(*) as c FROM chunks").get() as { c: number }).c;
-    const provider = createEmbeddingProvider({});
+    const factsCount = (db.prepare("SELECT COUNT(*) as c FROM facts").get() as { c: number }).c;
     db.close();
+    const graphiti = await isGraphitiAvailable();
     return reply.send({
-      enabled: process.env["OPENPHONE_MEMORY_ENABLED"] !== "false",
-      provider: provider ? "openai" : "none",
-      model: provider?.model ?? null,
-      filesIndexed: files,
-      chunksIndexed: chunks,
-      vectorAvailable: Boolean(provider),
-      ftsAvailable: true,
+      factsCount,
+      graphiti,
+      graphitiUrl: process.env["GRAPHITI_SERVICE_URL"] ?? "http://localhost:7473",
     });
   });
 
-  app.post("/api/memory/sync", async (_request, reply) => {
-    const result = await syncFiles("manual");
-    return reply.send(result);
-  });
-
+  // Proxy KG search through the control plane so the CLI works unchanged
   app.get<{ Querystring: { q?: string } }>("/api/memory/search", async (request, reply) => {
     const q = request.query.q?.trim();
-    if (!q) {
-      return reply.status(400).send({ error: "query parameter 'q' required" });
-    }
-    const results = await search(q);
+    if (!q) return reply.status(400).send({ error: "query parameter 'q' required" });
+    const results = await searchGraph(q);
     return reply.send(results);
+  });
+
+  app.get("/api/memory/facts", async (_request, reply) => {
+    return reply.send(getFacts());
+  });
+
+  app.post<{ Body: { key: string; value: string } }>("/api/memory/facts", async (request, reply) => {
+    const { key, value } = request.body;
+    if (!key || !value) return reply.status(400).send({ error: "key and value required" });
+    setFact(key, value, "api");
+    return reply.status(201).send({ key, value });
+  });
+
+  app.delete<{ Params: { key: string } }>("/api/memory/facts/:key", async (request, reply) => {
+    deleteFact(request.params.key);
+    return reply.status(204).send();
   });
 };
 

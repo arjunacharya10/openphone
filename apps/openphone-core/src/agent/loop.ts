@@ -17,6 +17,8 @@ export interface AgentTurnParams {
   cardContext?: { title: string; context: string };
   /** Optional turn context (cardId from sessionKey) for tool dispatch */
   turnContext?: TurnContext;
+  /** Override the system prompt (skips buildSystemPrompt) */
+  systemPrompt?: string;
 }
 
 export interface AgentTurnResult {
@@ -79,7 +81,7 @@ export async function runAgentTurn(params: AgentTurnParams): Promise<AgentTurnRe
     await runMemoryFlush(params.sessionKey);
   }
   const config = await loadAgentConfig();
-  const systemPrompt = await buildSystemPrompt(config, undefined, params.message);
+  const systemPrompt = params.systemPrompt ?? await buildSystemPrompt(config, undefined, params.message);
   const model = resolveModel(config.model);
 
   const messages: Message[] = [
