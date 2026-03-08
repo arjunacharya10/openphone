@@ -199,11 +199,12 @@ Typed pub/sub for internal state events (`card:created`, `card:removed`, `ledger
 
 ## Running the Graphiti Service
 
+Requires [uv](https://docs.astral.sh/uv/) — handles Python 3.11+ and the virtualenv automatically.
+
 ```bash
 cd apps/graphiti-service
-cp .env.example .env    # set KUZU_DB path and Ollama model
-pip install -e .
-python main.py          # starts on port 7473
+cp .env.example .env       # set KUZU_DB path and Ollama model
+uv run python main.py      # starts on port 7473
 ```
 
 openphone-core logs `graphiti-service: connected` on startup when reachable, and degrades gracefully (no KG injection) when not.
