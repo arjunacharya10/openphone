@@ -1,11 +1,13 @@
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from graphiti_core import Graphiti
+from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.driver.kuzu_driver import KuzuDriver
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client.config import LLMConfig
@@ -30,6 +32,8 @@ graphiti: Graphiti | None = None
 async def lifespan(app: FastAPI):
     global graphiti
 
+    if KUZU_DB != ":memory:":
+        Path(KUZU_DB).parent.mkdir(parents=True, exist_ok=True)
     kuzu_driver = KuzuDriver(db=KUZU_DB)
     llm_client = OpenAIClient(
         config=LLMConfig(
@@ -46,10 +50,19 @@ async def lifespan(app: FastAPI):
         )
     )
 
+    cross_encoder = OpenAIRerankerClient(
+        config=LLMConfig(
+            api_key=LLM_API_KEY,
+            model=LLM_MODEL,
+            base_url=LLM_BASE_URL,
+        )
+    )
+
     graphiti = Graphiti(
         graph_driver=kuzu_driver,
         llm_client=llm_client,
         embedder=embedder,
+        cross_encoder=cross_encoder,
     )
     await graphiti.build_indices_and_constraints()
     print(f"[graphiti-service] ready — db={KUZU_DB} model={LLM_MODEL}")

@@ -9,6 +9,5 @@ dependencies = [
     "python-dotenv",
 ]
 
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.backends.legacy:build"
+[tool.uv]
+package = false
