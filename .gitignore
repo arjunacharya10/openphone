@@ -11,5 +11,7 @@ dist/
 # IDE / editor
 .claude/
 
-# Memory engine runtime DB
+# Memory engine runtime files
 **/brain.db
+**/graph.kuzu/
+**/.venv/
