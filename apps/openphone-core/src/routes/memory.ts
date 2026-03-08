@@ -1,15 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
 import { searchGraph } from "../graph/client.js";
 import { deleteFact, getFacts, setFact } from "../memory/facts.js";
-import { openMemoryDb, ensureMemorySchema } from "../memory/schema.js";
+import { withMemoryDb } from "../memory/schema.js";
 import { isGraphitiAvailable } from "../graph/client.js";
 
 const memoryRoutes: FastifyPluginAsync = async (app) => {
   app.get("/api/memory/status", async (_request, reply) => {
-    const db = openMemoryDb();
-    ensureMemorySchema(db);
-    const factsCount = (db.prepare("SELECT COUNT(*) as c FROM facts").get() as { c: number }).c;
-    db.close();
+    const factsCount = withMemoryDb(
+      (db) => (db.prepare("SELECT COUNT(*) as c FROM facts").get() as { c: number }).c
+    );
     const graphiti = await isGraphitiAvailable();
     return reply.send({
       factsCount,

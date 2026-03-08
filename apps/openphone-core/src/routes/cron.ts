@@ -1,25 +1,11 @@
 import type { FastifyPluginAsync } from "fastify";
-import { listCronJobs, createCronJob, getCronJobById, updateCronJob, deleteCronJob } from "../cron/repo.js";
+import { listCronJobs, createCronJob, getCronJobById, updateCronJob, deleteCronJob, toCronJobDto } from "../cron/repo.js";
 import { scheduleCronJob, stopCronJob, reloadCronScheduler } from "../cron/scheduler.js";
 import type { CronJob as CronJobDto } from "../api/types.js";
 
 const cronRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Reply: CronJobDto[] }>("/api/cron", async (_request, reply) => {
-    const rows = listCronJobs();
-    const jobs: CronJobDto[] = rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      schedule: r.schedule,
-      sessionKey: r.sessionKey,
-      message: r.message,
-      enabled: r.enabled,
-      nextRun: null,
-      lastRun: r.lastRunAt,
-      lastStatus: r.lastStatus,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    }));
-    return reply.send(jobs);
+    return reply.send(listCronJobs().map(toCronJobDto));
   });
 
   app.post<{
@@ -40,20 +26,7 @@ const cronRoutes: FastifyPluginAsync = async (app) => {
       enabled: enabled ?? true,
     });
     scheduleCronJob(job);
-    const out: CronJobDto = {
-      id: job.id,
-      name: job.name,
-      schedule: job.schedule,
-      sessionKey: job.sessionKey,
-      message: job.message,
-      enabled: job.enabled,
-      nextRun: null,
-      lastRun: job.lastRunAt,
-      lastStatus: job.lastStatus,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
-    };
-    return reply.status(201).send(out);
+    return reply.status(201).send(toCronJobDto(job));
   });
 
   app.put<{
@@ -78,20 +51,7 @@ const cronRoutes: FastifyPluginAsync = async (app) => {
     }
     stopCronJob(id);
     scheduleCronJob(updated);
-    const out: CronJobDto = {
-      id: updated.id,
-      name: updated.name,
-      schedule: updated.schedule,
-      sessionKey: updated.sessionKey,
-      message: updated.message,
-      enabled: updated.enabled,
-      nextRun: null,
-      lastRun: updated.lastRunAt,
-      lastStatus: updated.lastStatus,
-      createdAt: updated.createdAt,
-      updatedAt: updated.updatedAt,
-    };
-    return reply.send(out);
+    return reply.send(toCronJobDto(updated));
   });
 
   app.delete<{

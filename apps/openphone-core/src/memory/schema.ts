@@ -19,6 +19,16 @@ export function openMemoryDb(): Database.Database {
   return db;
 }
 
+export function withMemoryDb<T>(fn: (db: Database.Database) => T): T {
+  const db = openMemoryDb();
+  ensureMemorySchema(db);
+  try {
+    return fn(db);
+  } finally {
+    db.close();
+  }
+}
+
 export function ensureMemorySchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS meta (

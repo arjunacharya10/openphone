@@ -1,7 +1,7 @@
 import { runAgentTurn } from "../agent/loop.js";
 import { getSessionHistory } from "../agent/sessions.js";
 import { ingestSessionHistory } from "../graph/ingest.js";
-import { ensureMemorySchema, openMemoryDb } from "./schema.js";
+import { withMemoryDb } from "./schema.js";
 
 const HISTORY_SIZE_THRESHOLD_BYTES = 50_000;
 const FLUSH_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
@@ -36,12 +36,11 @@ export function shouldRunMemoryFlush(sessionKey: string): boolean {
   if (historyJson.length < HISTORY_SIZE_THRESHOLD_BYTES) return false;
 
   try {
-    const db = openMemoryDb();
-    ensureMemorySchema(db);
-    const row = db.prepare("SELECT value FROM meta WHERE key = ?").get(`flush:${sessionKey}`) as
-      | { value: string }
-      | undefined;
-    db.close();
+    const row = withMemoryDb((db) =>
+      db.prepare("SELECT value FROM meta WHERE key = ?").get(`flush:${sessionKey}`) as
+        | { value: string }
+        | undefined
+    );
     if (!row) return true;
     const lastFlush = parseInt(row.value, 10);
     if (!Number.isFinite(lastFlush)) return true;
@@ -66,12 +65,10 @@ export async function runMemoryFlush(sessionKey: string): Promise<void> {
   ingestSessionHistory(sessionKey, "flush");
 
   try {
-    const db = openMemoryDb();
-    ensureMemorySchema(db);
-    db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run(
-      `flush:${sessionKey}`,
-      String(Date.now())
+    withMemoryDb((db) =>
+      db
+        .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)")
+        .run(`flush:${sessionKey}`, String(Date.now()))
     );
-    db.close();
   } catch {}
 }

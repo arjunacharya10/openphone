@@ -1,29 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { CronJobRow } from "./types.js";
+import type { CronJob as CronJobDto } from "../api/types.js";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { cronJobs } from "../db/schema.js";
 
-export function listCronJobs(): CronJobRow[] {
-  const rows = db.select().from(cronJobs).all();
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    schedule: r.schedule,
-    sessionKey: r.sessionKey,
-    message: r.message,
-    enabled: r.enabled,
-    lastRunAt: r.lastRunAt,
-    lastStatus: r.lastStatus,
-    createdAt: r.createdAt,
-    updatedAt: r.updatedAt,
-  }));
-}
-
-export function getCronJobById(id: string): CronJobRow | null {
-  const rows = db.select().from(cronJobs).where(eq(cronJobs.id, id)).limit(1).all();
-  if (rows.length === 0) return null;
-  const r = rows[0];
+function rowToCronJob(r: typeof cronJobs.$inferSelect): CronJobRow {
   return {
     id: r.id,
     name: r.name,
@@ -36,6 +18,31 @@ export function getCronJobById(id: string): CronJobRow | null {
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
+}
+
+export function toCronJobDto(job: CronJobRow): CronJobDto {
+  return {
+    id: job.id,
+    name: job.name,
+    schedule: job.schedule,
+    sessionKey: job.sessionKey,
+    message: job.message,
+    enabled: job.enabled,
+    nextRun: null,
+    lastRun: job.lastRunAt,
+    lastStatus: job.lastStatus,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+}
+
+export function listCronJobs(): CronJobRow[] {
+  return db.select().from(cronJobs).all().map(rowToCronJob);
+}
+
+export function getCronJobById(id: string): CronJobRow | null {
+  const rows = db.select().from(cronJobs).where(eq(cronJobs.id, id)).limit(1).all();
+  return rows.length === 0 ? null : rowToCronJob(rows[0]);
 }
 
 export function createCronJob(opts: {
