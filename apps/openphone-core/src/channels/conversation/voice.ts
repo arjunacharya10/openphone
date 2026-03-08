@@ -3,6 +3,7 @@ import type { WebSocket } from "ws";
 import type { ConversationChannel } from "../traits.js";
 import { dispatchStreamingTurn } from "../../gateway/dispatch.js";
 import { buildVoiceSessionKey } from "../../gateway/session-key.js";
+import { ingestSessionHistory } from "../../graph/ingest.js";
 import { subscribe } from "../../lib/event-bus.js";
 
 /**
@@ -89,6 +90,7 @@ export function createVoiceChannel(): ConversationChannel {
 
         socket.on("close", () => {
           unsub();
+          ingestSessionHistory(sessionKey, "voice");
           request.log.info({ deviceId }, "voice client disconnected");
         });
       });

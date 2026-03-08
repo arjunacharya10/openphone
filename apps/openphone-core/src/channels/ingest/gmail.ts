@@ -8,6 +8,7 @@ import {
 import type { InboundMessage } from "../../gateway/types.js";
 import { buildGmailSessionKey } from "../../gateway/session-key.js";
 import { dispatchInboundMessage } from "../../gateway/dispatch.js";
+import { ingestSessionHistory } from "../../graph/ingest.js";
 import { setLastGmailInboundAt } from "../../status/inbound-state.js";
 import { publish } from "../../lib/event-bus.js";
 
@@ -73,6 +74,7 @@ export function createGmailIngestChannel(logger: Logger): IngestChannel {
             metadata: { account, historyId: items[0]?.historyId, itemCount: items.length },
           };
           const result = await dispatchInboundMessage(inbound);
+          ingestSessionHistory(sessionKey, "gmail");
           setLastGmailInboundAt();
           publish({ type: "ingest:received", payload: { channel: "gmail", summary: body.slice(0, 120) } });
           logger.info({ sessionKey, toolCallCount: result.toolCallCount }, "gmail agent turn done");

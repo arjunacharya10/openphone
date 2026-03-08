@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { ConversationChannel } from "../traits.js";
 import { dispatchStreamingTurn } from "../../gateway/dispatch.js";
 import { buildWhatsAppSessionKey } from "../../gateway/session-key.js";
+import { ingestSessionHistory } from "../../graph/ingest.js";
 import { subscribe } from "../../lib/event-bus.js";
 
 /**
@@ -56,6 +57,7 @@ export function createWhatsAppChannel(): ConversationChannel {
               source: "whatsapp",
               onDelta: () => {}, // WhatsApp doesn't support streaming; collect full response
             });
+            ingestSessionHistory(sessionKey, "whatsapp");
             if (result.text) {
               await sock?.sendMessage(jid, { text: result.text });
             }

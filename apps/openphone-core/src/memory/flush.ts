@@ -1,7 +1,6 @@
-import type { Message } from "@mariozechner/pi-ai";
 import { runAgentTurn } from "../agent/loop.js";
 import { getSessionHistory } from "../agent/sessions.js";
-import { addEpisode } from "../graph/client.js";
+import { ingestSessionHistory } from "../graph/ingest.js";
 import { ensureMemorySchema, openMemoryDb } from "./schema.js";
 
 const HISTORY_SIZE_THRESHOLD_BYTES = 50_000;
@@ -52,22 +51,6 @@ export function shouldRunMemoryFlush(sessionKey: string): boolean {
   }
 }
 
-function historyToText(history: Message[]): string {
-  return history
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => {
-      const role = m.role === "user" ? "User" : "Assistant";
-      const content = m.content as Array<{ type: string; text?: string }>;
-      const text = content
-        .filter((b) => b.type === "text")
-        .map((b) => b.text ?? "")
-        .join("");
-      return `${role}: ${text}`;
-    })
-    .filter((line) => line.length > 10)
-    .join("\n\n");
-}
-
 export async function runMemoryFlush(sessionKey: string): Promise<void> {
   const history = getSessionHistory(sessionKey);
   const prompt = getResolvedPrompt();
@@ -79,15 +62,8 @@ export async function runMemoryFlush(sessionKey: string): Promise<void> {
     systemPrompt: FLUSH_SYSTEM,
   });
 
-  // Ingest conversation into the knowledge graph (fire-and-forget)
-  const episodeText = historyToText(history);
-  if (episodeText.length > 50) {
-    addEpisode({
-      name: `session:${sessionKey}:${formatDate(new Date())}`,
-      content: episodeText,
-      sourceDescription: "openphone conversation",
-    }).catch(() => {});
-  }
+  // Also ingest into Graphiti KG in case session-end ingestion was missed
+  ingestSessionHistory(sessionKey, "flush");
 
   try {
     const db = openMemoryDb();
