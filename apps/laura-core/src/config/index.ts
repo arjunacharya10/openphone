@@ -5,11 +5,35 @@ import { fileURLToPath } from "node:url";
 const PKG_ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "../..");
 export const CONFIG_PATH = join(PKG_ROOT, "config", "laura.config.json");
 
+export interface NetworkConfig {
+  /** Tailscale Funnel URL exposed to the public internet (e.g. https://hostname.ts.net) */
+  funnelUrl?: string;
+  /** Local port Laura listens on */
+  port?: number;
+}
+
+export interface GmailWatchState {
+  email: string;
+  historyId: string;
+  /** Unix timestamp in ms — watch expires after 7 days */
+  expiration: string;
+}
+
+export interface GoogleConfig {
+  projectId?: string;
+  pubsubTopic?: string;
+  pubsubSubscription?: string;
+  /** Active gmail.users.watch() state, keyed by email address */
+  watches?: Record<string, GmailWatchState>;
+}
+
 export interface LauraConfig {
   model?: string;
   offlineFallback?: string;
   gmail?: Record<string, unknown>;
   cron?: Record<string, unknown>;
+  network?: NetworkConfig;
+  google?: GoogleConfig;
 }
 
 const DEFAULTS: LauraConfig = {

@@ -60,6 +60,14 @@ export const cronJobs = sqliteTable("cron_jobs", {
   updatedAt: text("updated_at").notNull(),
 });
 
+// ── Channel State (persistent KV for ingest channels) ──
+
+export const channelState = sqliteTable("channel_state", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 // ── Calendar Events ──
 
 export const calendarEvents = sqliteTable(

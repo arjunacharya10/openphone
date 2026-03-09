@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { PubSub, type Message } from "@google-cloud/pubsub";
 import { google } from "googleapis";
+import { GoogleAuth } from "google-auth-library";
 import type { OAuth2Client } from "google-auth-library";
 import type { IngestChannel, Logger } from "../traits.js";
 import {
@@ -14,6 +15,8 @@ import { dispatchInboundMessage } from "../../gateway/dispatch.js";
 import { ingestSessionHistory } from "../../graph/ingest.js";
 import { setLastGmailInboundAt } from "../../status/inbound-state.js";
 import { publish } from "../../lib/event-bus.js";
+import { loadConfig, saveConfig, type GmailWatchState } from "../../config/index.js";
+import { getChannelState, setChannelState } from "../../db/channel-state.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -130,17 +133,83 @@ async function fetchNewMessages(
 }
 
 // ---------------------------------------------------------------------------
+// Watch renewal
+// ---------------------------------------------------------------------------
+
+const RENEWAL_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
+const RENEWAL_THRESHOLD_MS = 24 * 60 * 60 * 1000;      // renew when < 24h remaining
+
+async function renewWatch(
+  email: string,
+  topicName: string,
+  logger: Logger,
+): Promise<GmailWatchState | null> {
+  try {
+    const auth = new GoogleAuth({
+      scopes: [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.modify",
+      ],
+    });
+    const gmail = google.gmail({ version: "v1", auth: auth as never });
+    const res = await gmail.users.watch({
+      userId: email,
+      requestBody: { topicName, labelIds: ["INBOX"], labelFilterBehavior: "INCLUDE" },
+    });
+
+    const historyId = res.data.historyId;
+    const expiration = res.data.expiration;
+    if (!historyId || !expiration) return null;
+
+    const state: GmailWatchState = { email, historyId, expiration };
+    const config = await loadConfig();
+    config.google = {
+      ...config.google,
+      watches: { ...(config.google?.watches ?? {}), [email]: state },
+    };
+    await saveConfig(config);
+    logger.info({ email, expiration }, "gmail: watch renewed");
+    return state;
+  } catch (err) {
+    logger.error({ err, email }, "gmail: watch renewal failed");
+    return null;
+  }
+}
+
+function startRenewalTimer(
+  watches: Record<string, GmailWatchState>,
+  projectId: string,
+  topicName: string,
+  logger: Logger,
+): NodeJS.Timeout {
+  const fullTopicName = `projects/${projectId}/topics/${topicName}`;
+
+  return setInterval(async () => {
+    for (const [email, state] of Object.entries(watches)) {
+      const expiresAt = Number(state.expiration);
+      const remaining = expiresAt - Date.now();
+      if (remaining < RENEWAL_THRESHOLD_MS) {
+        logger.info({ email, remaining }, "gmail: watch expiring soon, renewing");
+        const updated = await renewWatch(email, fullTopicName, logger);
+        if (updated) watches[email] = updated;
+      }
+    }
+  }, RENEWAL_CHECK_INTERVAL_MS);
+}
+
+// ---------------------------------------------------------------------------
 // Channel
 // ---------------------------------------------------------------------------
 
 export function createGmailIngestChannel(logger: Logger): IngestChannel {
   const semaphore = createSemaphore(MAX_CONCURRENT);
 
-  // Last processed historyId per email address — persists across notifications
-  // but resets on restart (acceptable: missed window caught on next notification)
+  // Seeded from config on start() — survives restarts
   const lastHistoryIds = new Map<string, string>();
 
   let pubsubSubscription: ReturnType<InstanceType<typeof PubSub>["subscription"]> | null = null;
+  let renewalTimer: NodeJS.Timeout | null = null;
+  let fallbackTimer: NodeJS.Timeout | null = null;
 
   const debouncer = createInboundDebouncer<GmailInboundItem>({
     debounceMs: DEBOUNCE_MS,
@@ -183,29 +252,65 @@ export function createGmailIngestChannel(logger: Logger): IngestChannel {
     },
   });
 
+  function dbKey(email: string): string {
+    return `gmail:historyId:${email}`;
+  }
+
+  function persistHistoryId(email: string, historyId: string): void {
+    lastHistoryIds.set(email, historyId);
+    setChannelState(dbKey(email), historyId);
+  }
+
+  async function processNewMessages(
+    gmailClient: ReturnType<typeof google.gmail>,
+    email: string,
+    fromHistoryId: string,
+    toHistoryId: string,
+  ): Promise<void> {
+    const messages = await fetchNewMessages(gmailClient, email, fromHistoryId);
+    persistHistoryId(email, toHistoryId);
+
+    if (messages.length === 0) return;
+
+    const parts = messages.slice(0, 10).map((m) => `"${m.subject ?? "(no subject)"}" from ${m.from ?? "unknown"}`);
+    const eventDescription = `New Gmail: ${messages.length} message(s) — ${parts.join("; ")}`;
+    await debouncer.enqueue({ eventDescription, messages, account: email, historyId: toHistoryId });
+  }
+
   async function handleNotification(
     gmailClient: ReturnType<typeof google.gmail>,
     notification: GmailPubSubNotification,
   ): Promise<void> {
     const { emailAddress, historyId } = notification;
     const lastHistoryId = lastHistoryIds.get(emailAddress);
-    lastHistoryIds.set(emailAddress, historyId);
 
     if (!lastHistoryId) {
-      // First notification after startup — establish baseline, no diff available
+      // No baseline yet — establish it and wait for next notification
+      persistHistoryId(emailAddress, historyId);
       logger.info({ account: emailAddress, historyId }, "gmail: baseline established");
       return;
     }
 
-    const messages = await fetchNewMessages(gmailClient, emailAddress, lastHistoryId);
+    if (lastHistoryId === historyId) return; // nothing new
 
-    const parts = messages.slice(0, 10).map((m) => `"${m.subject ?? "(no subject)"}" from ${m.from ?? "unknown"}`);
-    const eventDescription =
-      parts.length > 0
-        ? `New Gmail: ${messages.length} message(s) — ${parts.join("; ")}`
-        : `New Gmail activity (historyId ${historyId})`;
+    await processNewMessages(gmailClient, emailAddress, lastHistoryId, historyId);
+  }
 
-    await debouncer.enqueue({ eventDescription, messages, account: emailAddress, historyId });
+  /** Fallback poll: scan history.list for each watched account to catch dropped notifications. */
+  async function fallbackPoll(gmailClient: ReturnType<typeof google.gmail>): Promise<void> {
+    for (const [email, lastHistoryId] of lastHistoryIds) {
+      try {
+        // Get current historyId from Gmail to compare
+        const profile = await gmailClient.users.getProfile({ userId: email });
+        const currentHistoryId = profile.data.historyId;
+        if (!currentHistoryId || currentHistoryId === lastHistoryId) continue;
+
+        logger.info({ email, lastHistoryId, currentHistoryId }, "gmail: fallback poll found gap, catching up");
+        await processNewMessages(gmailClient, email, lastHistoryId, currentHistoryId);
+      } catch (err) {
+        logger.error({ err, email }, "gmail: fallback poll failed");
+      }
+    }
   }
 
   return {
@@ -218,6 +323,27 @@ export function createGmailIngestChannel(logger: Logger): IngestChannel {
       if (!SUBSCRIPTION_NAME) {
         logger.warn({}, "gmail: GMAIL_PUBSUB_SUBSCRIPTION not set — ingest disabled");
         return;
+      }
+
+      // Seed lastHistoryIds — DB wins (most current), falls back to config watch state
+      const config = await loadConfig();
+      const watches = config.google?.watches ?? {};
+      for (const [email, state] of Object.entries(watches)) {
+        const dbHistoryId = getChannelState(`gmail:historyId:${email}`);
+        const historyId = dbHistoryId ?? state.historyId;
+        lastHistoryIds.set(email, historyId);
+        logger.info({ email, historyId, source: dbHistoryId ? "db" : "config" }, "gmail: seeded historyId");
+      }
+
+      // Start watch renewal timer if watch state and GCP config are present
+      if (config.google?.projectId && config.google?.pubsubTopic && Object.keys(watches).length > 0) {
+        renewalTimer = startRenewalTimer(
+          watches,
+          config.google.projectId,
+          config.google.pubsubTopic,
+          logger,
+        );
+        logger.info({}, "gmail: watch renewal timer started (checks every 24h)");
       }
 
       const gmailClient = createGmailClient();
@@ -244,9 +370,19 @@ export function createGmailIngestChannel(logger: Logger): IngestChannel {
       });
 
       logger.info({ subscription: SUBSCRIPTION_NAME }, "gmail: pubsub subscriber started");
+
+      // Fallback poll every 30min — catches notifications dropped by Pub/Sub
+      const FALLBACK_INTERVAL_MS = 30 * 60 * 1000;
+      fallbackTimer = setInterval(() => {
+        void fallbackPoll(gmailClient).catch((err) => {
+          logger.error({ err }, "gmail: fallback poll error");
+        });
+      }, FALLBACK_INTERVAL_MS);
     },
 
     async stop(): Promise<void> {
+      if (renewalTimer) clearInterval(renewalTimer);
+      if (fallbackTimer) clearInterval(fallbackTimer);
       await pubsubSubscription?.close();
     },
   };

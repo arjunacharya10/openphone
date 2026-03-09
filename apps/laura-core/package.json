@@ -7,6 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "ctl": "tsx src/ctl/cli.ts",
+    "setup": "tsx src/setup/index.ts",
     "start": "node dist/server.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"
