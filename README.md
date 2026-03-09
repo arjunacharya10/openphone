@@ -1,11 +1,11 @@
-# OpenPhone
+# Laura
 
-OpenPhone is an AI-first personal assistant device interface built on Ubuntu Core. This monorepo contains the UI shell, core orchestration service, assistant service, shared API contracts, snap packaging configurations, and development tooling.
+Laura is an AI-first personal assistant device interface built on Ubuntu Core. This monorepo contains the UI shell, core orchestration service, assistant service, shared API contracts, snap packaging configurations, and development tooling.
 
 ## Prerequisites
 
-- **Node.js** (v18+) — for openphone-core
-- **Qt** (6.x) with Quick and WebSockets — for openphone-ui
+- **Node.js** (v18+) — for laura-core
+- **Qt** (6.x) with Quick and WebSockets — for laura-ui
 - **Mulch** — for structured expertise (see below)
 
 ## Install Mulch
@@ -41,25 +41,25 @@ Run `mulch status` for domain stats, `mulch --help` for full usage.
 
 ## Getting Started
 
-### openphone-core (Node.js / Fastify)
+### laura-core (Node.js / Fastify)
 
 ```bash
-cd apps/openphone-core
+cd apps/laura-core
 npm install
 npm run dev
 ```
 
 Starts the API + WebSocket server (default port 3000).
 
-### openphone-ui (Qt / QML)
+### laura-ui (Qt / QML)
 
 ```bash
-cd apps/openphone-ui
+cd apps/laura-ui
 qmake
 make
-./openphone-ui.app/Contents/MacOS/openphone-ui   # macOS
+./laura-ui.app/Contents/MacOS/laura-ui   # macOS
 # or
-./openphone-ui                                  # Linux
+./laura-ui                                  # Linux
 ```
 
 ### contracts (shared TypeScript types)
@@ -71,7 +71,7 @@ npm install
 
 ## Environment Variables
 
-All env vars apply to **openphone-core**. Copy `apps/openphone-core/.env.example` to `apps/openphone-core/.env` and set values. Shell `export` also works.
+All env vars apply to **laura-core**. Copy `apps/laura-core/.env.example` to `apps/laura-core/.env` and set values. Shell `export` also works.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -87,8 +87,8 @@ All env vars apply to **openphone-core**. Copy `apps/openphone-core/.env.example
 
 | Path | Description |
 |------|-------------|
-| `apps/openphone-core/` | Node.js Fastify service — API, WebSocket, state |
-| `apps/openphone-ui/` | Qt/QML device UI shell |
+| `apps/laura-core/` | Node.js Fastify service — API, WebSocket, state |
+| `apps/laura-ui/` | Qt/QML device UI shell |
 | `contracts/` | Shared TypeScript events and types |
 | `.mulch/` | Mulch expertise (git-tracked) |
 

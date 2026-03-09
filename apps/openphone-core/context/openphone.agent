@@ -1,3 +1,0 @@
-name: openphone
-model: openrouter/free
-offline_fallback: ollama/llama3.2

@@ -1,3 +1,3 @@
 # contracts
 
-Shared API contracts and event definitions used across OpenPhone services. Ensures consistent communication between openphone-ui, openphone-core, and openclaw.
+Shared API contracts and event definitions used across Laura services. Ensures consistent communication between laura-ui, laura-core, and openclaw.

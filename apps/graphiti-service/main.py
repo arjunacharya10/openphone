@@ -23,7 +23,7 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "llama3.1:8b")
 EMBEDDING_BASE_URL = os.environ.get("EMBEDDING_BASE_URL", LLM_BASE_URL)
 EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", LLM_API_KEY)
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
-GROUP_ID = os.environ.get("GROUP_ID", "openphone")
+GROUP_ID = os.environ.get("GROUP_ID", "laura")
 
 graphiti: Graphiti | None = None
 
@@ -79,7 +79,7 @@ app = FastAPI(title="graphiti-service", lifespan=lifespan)
 class AddEpisodeRequest(BaseModel):
     name: str
     content: str
-    source_description: str = "openphone conversation"
+    source_description: str = "laura conversation"
     group_id: str = GROUP_ID
     reference_time: str | None = None
 

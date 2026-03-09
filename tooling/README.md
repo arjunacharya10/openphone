@@ -1,3 +1,3 @@
 # tooling
 
-Development tooling, build utilities, and automation for the OpenPhone monorepo.
+Development tooling, build utilities, and automation for the Laura monorepo.

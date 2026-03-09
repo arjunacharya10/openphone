@@ -1,6 +1,6 @@
-# Contributing to OpenPhone
+# Contributing to Laura
 
-Thanks for your interest in contributing. Here’s how to get started.
+Thanks for your interest in contributing. Here's how to get started.
 
 ## Development Setup
 
@@ -50,12 +50,12 @@ Keep the first line under ~72 characters; add a body for more context.
 ## Code Style
 
 - **TypeScript/JavaScript** — Follow existing patterns in the codebase.
-- **QML** — Match conventions in `apps/openphone-ui/qml/`.
+- **QML** — Match conventions in `apps/laura-ui/qml/`.
 - Keep changes focused; split large features into smaller PRs.
 
 ## Testing
 
-- Run `npm run dev` in `apps/openphone-core` and verify the app in `apps/openphone-ui`.
+- Run `npm run dev` in `apps/laura-core` and verify the app in `apps/laura-ui`.
 - For backend changes, manually test the relevant routes and WebSocket flows.
 
 ## Questions?
